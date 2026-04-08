@@ -49,6 +49,7 @@ class YtDlpService(private val config: AppConfig) {
     private fun buildCommand(url: String, workDir: Path, token: TokenPayload?, options: JobOptions): List<String> {
         val command = mutableListOf(
             config.ytdlpBin,
+            "--no-simulate",
             "--no-warnings",
             "--no-playlist",
             "--no-progress",
