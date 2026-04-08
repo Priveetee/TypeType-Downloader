@@ -25,6 +25,7 @@ dependencies {
     implementation("software.amazon.awssdk:s3:2.31.69")
     implementation("ch.qos.logback:logback-classic:1.5.20")
     testImplementation(kotlin("test"))
+    testImplementation("io.mockk:mockk:1.13.12")
 }
 
 application {
