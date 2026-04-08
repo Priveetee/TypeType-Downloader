@@ -31,14 +31,26 @@ class GarageStorageService(config: AppConfig) {
         .endpointOverride(endpoint)
         .region(region)
         .credentialsProvider(credentials)
-        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+        .serviceConfiguration(
+            S3Configuration.builder()
+                .pathStyleAccessEnabled(true)
+                .chunkedEncodingEnabled(false)
+                .checksumValidationEnabled(false)
+                .build(),
+        )
         .build()
 
     private val presigner: S3Presigner = S3Presigner.builder()
         .endpointOverride(endpoint)
         .region(region)
         .credentialsProvider(credentials)
-        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+        .serviceConfiguration(
+            S3Configuration.builder()
+                .pathStyleAccessEnabled(true)
+                .chunkedEncodingEnabled(false)
+                .checksumValidationEnabled(false)
+                .build(),
+        )
         .build()
 
     fun ensureBucket() {
