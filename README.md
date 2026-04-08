@@ -90,7 +90,13 @@ All configuration is via environment variables.
 ## API
 
 - `GET /health`
-- `POST /jobs` with `{ "url": "..." }` returns `{ "id": "...", "cached": false|true }`
+- `POST /jobs` accepts:
+  - `url` (required)
+  - `options.mode` (`video` or `audio`)
+  - `options.sponsorBlock` (`true`/`false`)
+  - `options.thumbnailOnly` (`true`/`false`)
+  - `options.subtitles` (`enabled`, `auto`, `embed`, `languages`, `format`)
+  and returns `{ "id": "...", "cached": false|true }`
 - `GET /jobs/{id}` returns one of `queued|running|done|failed` and includes a signed `artifactUrl` when available
 - `GET /jobs/{id}/artifact` redirects to signed Garage artifact URL when ready
 

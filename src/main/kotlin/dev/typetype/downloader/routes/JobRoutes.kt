@@ -16,7 +16,7 @@ fun Route.jobRoutes(jobService: JobService) {
         if (body.url.isBlank()) {
             return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "url is required"))
         }
-        val created = jobService.enqueue(body.url)
+        val created = jobService.enqueue(body.url, body.options)
         call.respond(HttpStatusCode.Created, created)
     }
 

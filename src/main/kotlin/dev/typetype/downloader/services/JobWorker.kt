@@ -2,6 +2,7 @@ package dev.typetype.downloader.services
 
 import dev.typetype.downloader.config.AppConfig
 import dev.typetype.downloader.db.JobsRepository
+import dev.typetype.downloader.models.JobOptions
 import dev.typetype.downloader.models.JobStatus
 import redis.clients.jedis.JedisPooled
 import java.nio.file.Files
@@ -21,21 +22,24 @@ class JobWorker(
             thread(name = "job-worker-$index", isDaemon = true) {
                 while (true) {
                     val item = redis.blpop(0, config.redisQueueKey) ?: continue
-                    val id = item.getOrNull(1) ?: continue
-                    process(id)
+                    val raw = item.getOrNull(1) ?: continue
+                    val payload = JobOptionsCodec.decodeQueue(raw)
+                    val id = payload?.id ?: raw
+                    val options = payload?.options ?: JobOptions()
+                    process(id, options)
                 }
             }
         }
     }
 
-    private fun process(id: String) {
+    private fun process(id: String, options: JobOptions) {
         val job = jobsRepository.getById(id) ?: return
         jobsRepository.markRunning(id)
         redis.setex(redisJobKey(id), config.jobTtlSeconds, "running")
         try {
             val startedAt = System.nanoTime()
             val token = tokenServiceClient.fetchForUrl(job.url)
-            val result = ytDlpService.download(job.url, token)
+            val result = ytDlpService.download(job.url, token, options)
             val durationMs = (System.nanoTime() - startedAt) / 1_000_000
             val status = if (result.error == null) JobStatus.DONE else JobStatus.FAILED
             val artifact = if (status == JobStatus.DONE && result.filePath != null) {

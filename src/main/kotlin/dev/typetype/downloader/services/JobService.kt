@@ -4,6 +4,7 @@ import dev.typetype.downloader.config.AppConfig
 import dev.typetype.downloader.db.JobRow
 import dev.typetype.downloader.db.JobsRepository
 import dev.typetype.downloader.models.CreateJobResponse
+import dev.typetype.downloader.models.JobOptions
 import dev.typetype.downloader.models.JobResponse
 import redis.clients.jedis.JedisPooled
 import java.net.URI
@@ -17,10 +18,12 @@ class JobService(
     private val storageService: GarageStorageService,
     private val config: AppConfig,
 ) {
-    fun enqueue(url: String): CreateJobResponse {
+    fun enqueue(url: String, requestedOptions: JobOptions): CreateJobResponse {
         val resolvedUrl = SourceUrlResolver.resolve(url)
         validateUrl(resolvedUrl)
-        val cacheKey = JobCacheKey.fromUrl(resolvedUrl)
+        val options = JobOptionsNormalizer.normalize(requestedOptions)
+        val optionsJson = JobOptionsCodec.encode(options)
+        val cacheKey = JobCacheKey.from(resolvedUrl, optionsJson)
         val id = UUID.randomUUID().toString()
         val reusable = jobsRepository.findReusableByCacheKey(cacheKey)
         if (reusable != null) {
@@ -33,7 +36,8 @@ class JobService(
             throw QueueSaturatedException("Queue is full")
         }
         jobsRepository.insertQueued(id = id, url = resolvedUrl, cacheKey = cacheKey)
-        redis.rpush(config.redisQueueKey, id)
+        val payload = JobOptionsCodec.encodeQueue(JobOptionsCodec.QueuePayload(id = id, options = options))
+        redis.rpush(config.redisQueueKey, payload)
         redis.setex(redisJobKey(id), config.jobTtlSeconds, "queued")
         return CreateJobResponse(id = id, cached = false)
     }
