@@ -45,6 +45,7 @@ class JobServiceRecoveryTest {
         every { redis.rpush("downloader:queue", capture(payloads)) } returns 1L
         service.recoverPendingJobs()
         verify { jobsRepository.resetRunningToQueued() }
+        verify { redis.del("downloader:queue") }
         verify(exactly = 2) { redis.setex(any(), 600L, "queued") }
         assertEquals(setOf("a", "b"), payloads.mapNotNull { JobOptionsCodec.decodeQueue(it)?.id }.toSet())
     }

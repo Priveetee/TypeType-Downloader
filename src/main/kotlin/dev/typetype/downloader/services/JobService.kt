@@ -76,6 +76,7 @@ class JobService(
 
     fun recoverPendingJobs() {
         jobsRepository.resetRunningToQueued()
+        redis.del(config.redisQueueKey)
         jobsRepository.listQueuedOrRunning().forEach { row ->
             val options = runCatching { JobOptionsCodec.decode(row.optionsJson) }.getOrElse { JobOptions() }
             val payload = JobOptionsCodec.encodeQueue(JobOptionsCodec.QueuePayload(id = row.id, options = options))
