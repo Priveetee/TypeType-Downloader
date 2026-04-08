@@ -1,6 +1,8 @@
 package dev.typetype.downloader.db
 
 import dev.typetype.downloader.models.JobStatus
+import java.sql.Timestamp
+import java.sql.Types
 import java.time.Instant
 
 class JobsRepository {
@@ -23,7 +25,7 @@ class JobsRepository {
             connection.prepareStatement(sql).use {
                 it.setString(1, id); it.setString(2, url); it.setString(3, cached.cacheKey); it.setString(4, optionsJson)
                 it.setString(5, JobStatus.DONE.name); it.setLong(6, 0L); it.setString(7, cached.title); it.setString(8, null)
-                it.setString(9, cached.artifactKey); it.setObject(10, cached.artifactExpiresAt); it.executeUpdate()
+                it.setString(9, cached.artifactKey); setInstant(it, 10, cached.artifactExpiresAt); it.executeUpdate()
             }
         }
     }
@@ -54,7 +56,7 @@ class JobsRepository {
         "UPDATE jobs SET status = ?, duration_ms = ?, title = ?, error = ?, artifact_key = ?, artifact_expires_at = ?, finished_at = NOW() WHERE id = ? AND status = ?",
     ) {
         it.setString(1, status.name); it.setLong(2, durationMs); it.setString(3, title); it.setString(4, error)
-        it.setString(5, artifactKey); it.setObject(6, artifactExpiresAt); it.setString(7, id); it.setString(8, JobStatus.RUNNING.name)
+        it.setString(5, artifactKey); setInstant(it, 6, artifactExpiresAt); it.setString(7, id); it.setString(8, JobStatus.RUNNING.name)
     } > 0
 
     fun resetRunningToQueued(): Int = update(
@@ -78,5 +80,13 @@ class JobsRepository {
                 rows
             }
         }
+    }
+
+    private fun setInstant(statement: java.sql.PreparedStatement, index: Int, value: Instant?) {
+        if (value == null) {
+            statement.setNull(index, Types.TIMESTAMP_WITH_TIMEZONE)
+            return
+        }
+        statement.setTimestamp(index, Timestamp.from(value))
     }
 }
