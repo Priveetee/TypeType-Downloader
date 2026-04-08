@@ -5,6 +5,7 @@ import dev.typetype.downloader.services.JobService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondRedirect
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -29,5 +30,21 @@ fun Route.jobRoutes(jobService: JobService) {
             mapOf("error" to "job not found"),
         )
         call.respond(HttpStatusCode.OK, job)
+    }
+
+    get("/jobs/{id}/artifact") {
+        val id = call.parameters["id"] ?: return@get call.respond(
+            HttpStatusCode.BadRequest,
+            mapOf("error" to "id is required"),
+        )
+        val job = jobService.get(id) ?: return@get call.respond(
+            HttpStatusCode.NotFound,
+            mapOf("error" to "job not found"),
+        )
+        val artifactUrl = job.artifactUrl ?: return@get call.respond(
+            HttpStatusCode.Conflict,
+            mapOf("error" to "artifact not ready"),
+        )
+        call.respondRedirect(artifactUrl, permanent = false)
     }
 }

@@ -15,6 +15,7 @@ import software.amazon.awssdk.services.s3.model.S3Exception
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import java.net.URI
+import java.nio.file.Path
 import java.time.Duration
 
 class GarageStorageService(config: AppConfig) {
@@ -54,6 +55,11 @@ class GarageStorageService(config: AppConfig) {
     fun putBytes(objectKey: String, body: ByteArray, contentType: String) {
         val request = PutObjectRequest.builder().bucket(bucket).key(objectKey).contentType(contentType).build()
         s3.putObject(request, RequestBody.fromBytes(body))
+    }
+
+    fun putFile(objectKey: String, filePath: Path, contentType: String) {
+        val request = PutObjectRequest.builder().bucket(bucket).key(objectKey).contentType(contentType).build()
+        s3.putObject(request, RequestBody.fromFile(filePath))
     }
 
     fun presignGet(objectKey: String, duration: Duration): String {

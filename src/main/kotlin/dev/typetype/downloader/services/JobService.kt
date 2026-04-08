@@ -18,12 +18,13 @@ class JobService(
     private val config: AppConfig,
 ) {
     fun enqueue(url: String): CreateJobResponse {
-        validateUrl(url)
-        val cacheKey = JobCacheKey.fromUrl(url)
+        val resolvedUrl = SourceUrlResolver.resolve(url)
+        validateUrl(resolvedUrl)
+        val cacheKey = JobCacheKey.fromUrl(resolvedUrl)
         val id = UUID.randomUUID().toString()
         val reusable = jobsRepository.findReusableByCacheKey(cacheKey)
         if (reusable != null) {
-            jobsRepository.insertDoneFromCache(id = id, url = url, cached = reusable)
+            jobsRepository.insertDoneFromCache(id = id, url = resolvedUrl, cached = reusable)
             redis.setex(redisJobKey(id), config.jobTtlSeconds, "done:cached")
             return CreateJobResponse(id = id, cached = true)
         }
@@ -31,7 +32,7 @@ class JobService(
         if (queueSize >= config.maxQueueSize) {
             throw QueueSaturatedException("Queue is full")
         }
-        jobsRepository.insertQueued(id = id, url = url, cacheKey = cacheKey)
+        jobsRepository.insertQueued(id = id, url = resolvedUrl, cacheKey = cacheKey)
         redis.rpush(config.redisQueueKey, id)
         redis.setex(redisJobKey(id), config.jobTtlSeconds, "queued")
         return CreateJobResponse(id = id, cached = false)

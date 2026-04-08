@@ -9,6 +9,7 @@ import dev.typetype.downloader.services.JobService
 import dev.typetype.downloader.services.JobWorker
 import dev.typetype.downloader.services.QueueSaturatedException
 import dev.typetype.downloader.services.GarageStorageService
+import dev.typetype.downloader.services.TokenServiceClient
 import dev.typetype.downloader.services.YtDlpService
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -30,8 +31,9 @@ fun Application.module() {
     storage.ensureBucket()
     val jobsRepository = JobsRepository()
     val ytDlpService = YtDlpService(config)
+    val tokenServiceClient = TokenServiceClient(config)
     val jobService = JobService(jobsRepository, redis, storage, config)
-    val worker = JobWorker(jobsRepository, redis, ytDlpService, storage, config)
+    val worker = JobWorker(jobsRepository, redis, ytDlpService, tokenServiceClient, storage, config)
     worker.start()
 
     install(CallLogging)
