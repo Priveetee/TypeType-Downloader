@@ -7,6 +7,7 @@ data class JobRow(
     val id: String,
     val url: String,
     val cacheKey: String,
+    val optionsJson: String,
     val status: JobStatus,
     val durationMs: Long,
     val title: String,

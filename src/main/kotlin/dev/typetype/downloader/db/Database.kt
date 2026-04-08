@@ -26,6 +26,7 @@ object Database {
                       id TEXT PRIMARY KEY,
                       source_url TEXT NOT NULL,
                       cache_key TEXT NOT NULL,
+                      options_json TEXT NOT NULL DEFAULT '{}',
                       status TEXT NOT NULL,
                       duration_ms BIGINT NOT NULL,
                       title TEXT NOT NULL,
@@ -39,10 +40,13 @@ object Database {
                     """.trimIndent()
                 )
                 statement.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cache_key TEXT")
+                statement.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS options_json TEXT")
                 statement.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS artifact_key TEXT")
                 statement.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS artifact_expires_at TIMESTAMPTZ")
                 statement.execute("UPDATE jobs SET cache_key = id WHERE cache_key IS NULL")
+                statement.execute("UPDATE jobs SET options_json = '{}' WHERE options_json IS NULL")
                 statement.execute("ALTER TABLE jobs ALTER COLUMN cache_key SET NOT NULL")
+                statement.execute("ALTER TABLE jobs ALTER COLUMN options_json SET NOT NULL")
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_jobs_cache_key ON jobs(cache_key)")
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_jobs_artifact_expiry ON jobs(artifact_expires_at)")

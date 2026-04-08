@@ -1,11 +1,15 @@
 package dev.typetype.downloader.routes
 
 import dev.typetype.downloader.models.CreateJobRequest
+import dev.typetype.downloader.services.CancelJobResult
+import dev.typetype.downloader.services.DeleteJobResult
 import dev.typetype.downloader.services.JobService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
+import io.ktor.server.response.respondText
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondRedirect
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -46,5 +50,23 @@ fun Route.jobRoutes(jobService: JobService) {
             mapOf("error" to "artifact not ready"),
         )
         call.respondRedirect(artifactUrl, permanent = false)
+    }
+
+    post("/jobs/{id}/cancel") {
+        val id = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "id is required"))
+        when (jobService.cancel(id)) {
+            CancelJobResult.CANCELLED -> call.respond(HttpStatusCode.Accepted, mapOf("status" to "cancelled"))
+            CancelJobResult.NOT_CANCELLABLE -> call.respond(HttpStatusCode.Conflict, mapOf("error" to "job is not cancellable"))
+            CancelJobResult.NOT_FOUND -> call.respond(HttpStatusCode.NotFound, mapOf("error" to "job not found"))
+        }
+    }
+
+    delete("/jobs/{id}") {
+        val id = call.parameters["id"] ?: return@delete call.respond(HttpStatusCode.BadRequest, mapOf("error" to "id is required"))
+        when (jobService.delete(id)) {
+            DeleteJobResult.DELETED -> call.respondText("", status = HttpStatusCode.NoContent)
+            DeleteJobResult.CONFLICT_RUNNING -> call.respond(HttpStatusCode.Conflict, mapOf("error" to "job is running"))
+            DeleteJobResult.NOT_FOUND -> call.respond(HttpStatusCode.NotFound, mapOf("error" to "job not found"))
+        }
     }
 }

@@ -14,17 +14,22 @@ data class YtDlpResult(
 )
 
 class YtDlpService(private val config: AppConfig) {
-    fun download(url: String, token: TokenPayload?, options: JobOptions): YtDlpResult {
+    fun download(url: String, token: TokenPayload?, options: JobOptions, shouldCancel: () -> Boolean = { false }): YtDlpResult {
         val workDir = Files.createTempDirectory("typetype-download-")
         val process = ProcessBuilder(buildCommand(url, workDir, token, options))
             .directory(workDir.toFile())
             .redirectErrorStream(true)
             .start()
-        val finished = process.waitFor(config.ytdlpTimeoutSeconds, TimeUnit.SECONDS)
+        val finished = waitFor(process, config.ytdlpTimeoutSeconds, shouldCancel)
         if (!finished) {
             process.destroyForcibly()
             deleteDirectory(workDir)
             return YtDlpResult(title = "", filePath = null, error = "yt-dlp timeout")
+        }
+        if (shouldCancel()) {
+            process.destroyForcibly()
+            deleteDirectory(workDir)
+            return YtDlpResult(title = "", filePath = null, error = "job cancelled")
         }
         val output = process.inputStream.bufferedReader().readLines()
         if (process.exitValue() != 0) {
@@ -54,8 +59,20 @@ class YtDlpService(private val config: AppConfig) {
         )
         when {
             options.thumbnailOnly -> command.addAll(listOf("--skip-download", "--write-thumbnail"))
-            options.mode == DownloadMode.AUDIO -> command.addAll(listOf("-f", "bestaudio/best", "--extract-audio", "--audio-format", "mp3"))
-            else -> command.addAll(listOf("-f", "bv*+ba/b", "--merge-output-format", "mp4"))
+            options.mode == DownloadMode.AUDIO -> {
+                val selector = if (options.quality.lowercase() == "worst") "worstaudio/worst" else "bestaudio/best"
+                command.addAll(listOf("-f", selector, "--extract-audio", "--audio-format", options.format.trim().ifBlank { "mp3" }))
+            }
+            else -> {
+                val selector = when (options.quality.lowercase()) {
+                    "1080p" -> "bv*[height<=1080]+ba/b[height<=1080]"
+                    "720p" -> "bv*[height<=720]+ba/b[height<=720]"
+                    "480p" -> "bv*[height<=480]+ba/b[height<=480]"
+                    "worst" -> "worst"
+                    else -> "bv*+ba/b"
+                }
+                command.addAll(listOf("-f", selector, "--merge-output-format", options.format.trim().ifBlank { "mp4" }))
+            }
         }
         if (options.sponsorBlock && !options.thumbnailOnly) {
             command.addAll(listOf("--sponsorblock-remove", options.sponsorBlockCategories.joinToString(",")))
@@ -87,9 +104,15 @@ class YtDlpService(private val config: AppConfig) {
     }
 
     private fun isTitleLine(value: String): Boolean = value.isNotBlank() && !value.startsWith("[")
-
+    private fun waitFor(process: Process, timeoutSeconds: Long, shouldCancel: () -> Boolean): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds)
+        while (System.nanoTime() < deadline) {
+            if (shouldCancel()) return true
+            if (process.waitFor(1, TimeUnit.SECONDS)) return true
+        }
+        return false
+    }
     private fun ext(path: Path): String = path.fileName.toString().substringAfterLast('.', "").lowercase()
-
     private fun deleteDirectory(dir: Path) {
         if (!Files.exists(dir)) return
         Files.walk(dir).sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }

@@ -12,6 +12,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.model.S3Exception
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import java.net.URI
@@ -66,6 +67,11 @@ class GarageStorageService(config: AppConfig) {
         val getRequest = GetObjectRequest.builder().bucket(bucket).key(objectKey).build()
         val presignRequest = GetObjectPresignRequest.builder().signatureDuration(duration).getObjectRequest(getRequest).build()
         return presigner.presignGetObject(presignRequest).url().toString()
+    }
+
+    fun deleteObject(objectKey: String) {
+        val request = DeleteObjectRequest.builder().bucket(bucket).key(objectKey).build()
+        s3.deleteObject(request)
     }
 
     fun close() {

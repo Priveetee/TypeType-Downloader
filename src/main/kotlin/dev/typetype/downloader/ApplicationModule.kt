@@ -34,6 +34,7 @@ fun Application.module() {
     val tokenServiceClient = TokenServiceClient(config)
     val jobService = JobService(jobsRepository, redis, storage, config)
     val worker = JobWorker(jobsRepository, redis, ytDlpService, tokenServiceClient, storage, config)
+    jobService.recoverPendingJobs()
     worker.start()
 
     install(CallLogging)

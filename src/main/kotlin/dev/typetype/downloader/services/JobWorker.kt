@@ -25,7 +25,7 @@ class JobWorker(
                     val raw = item.getOrNull(1) ?: continue
                     val payload = JobOptionsCodec.decodeQueue(raw)
                     val id = payload?.id ?: raw
-                    val options = payload?.options ?: JobOptions()
+                    val options = payload?.options ?: decodeStoredOptions(id)
                     process(id, options)
                 }
             }
@@ -34,12 +34,14 @@ class JobWorker(
 
     private fun process(id: String, options: JobOptions) {
         val job = jobsRepository.getById(id) ?: return
-        jobsRepository.markRunning(id)
+        if (!jobsRepository.markRunningIfQueued(id)) return
         redis.setex(redisJobKey(id), config.jobTtlSeconds, "running")
         try {
             val startedAt = System.nanoTime()
             val token = tokenServiceClient.fetchForUrl(job.url)
-            val result = ytDlpService.download(job.url, token, options)
+            val result = ytDlpService.download(job.url, token, options) {
+                jobsRepository.getById(id)?.status != JobStatus.RUNNING
+            }
             val durationMs = (System.nanoTime() - startedAt) / 1_000_000
             val status = if (result.error == null) JobStatus.DONE else JobStatus.FAILED
             val artifact = if (status == JobStatus.DONE && result.filePath != null) {
@@ -47,7 +49,7 @@ class JobWorker(
             } else {
                 null
             }
-            jobsRepository.markFinished(
+            val updated = jobsRepository.markFinishedIfRunning(
                 id = id,
                 status = status,
                 durationMs = durationMs,
@@ -56,10 +58,15 @@ class JobWorker(
                 artifactKey = artifact?.objectKey,
                 artifactExpiresAt = artifact?.expiresAt,
             )
-            redis.setex(redisJobKey(id), config.jobTtlSeconds, "${status.name.lowercase()}:$durationMs")
+            if (!updated && artifact != null) {
+                storageService.deleteObject(artifact.objectKey)
+            }
+            if (updated) {
+                redis.setex(redisJobKey(id), config.jobTtlSeconds, "${status.name.lowercase()}:$durationMs")
+            }
             result.filePath?.parent?.let { deleteDirectory(it) }
         } catch (error: Throwable) {
-            jobsRepository.markFinished(
+            jobsRepository.markFinishedIfRunning(
                 id = id,
                 status = JobStatus.FAILED,
                 durationMs = 0,
@@ -70,6 +77,11 @@ class JobWorker(
             )
             redis.setex(redisJobKey(id), config.jobTtlSeconds, "failed:0")
         }
+    }
+
+    private fun decodeStoredOptions(id: String): JobOptions {
+        val row = jobsRepository.getById(id) ?: return JobOptions()
+        return runCatching { JobOptionsCodec.decode(row.optionsJson) }.getOrElse { JobOptions() }
     }
 
     private fun uploadArtifact(cacheKey: String, filePath: java.nio.file.Path): StorageArtifact {
