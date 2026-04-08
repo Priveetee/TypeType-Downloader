@@ -60,18 +60,14 @@ class YtDlpService(private val config: AppConfig) {
         when {
             options.thumbnailOnly -> command.addAll(listOf("--skip-download", "--write-thumbnail"))
             options.mode == DownloadMode.AUDIO -> {
-                val selector = if (options.quality.lowercase() == "worst") "worstaudio/worst" else "bestaudio/best"
-                command.addAll(listOf("-f", selector, "--extract-audio", "--audio-format", options.format.trim().ifBlank { "mp3" }))
+                val selector = YtDlpOptionResolver.audioSelector(options.quality)
+                val audioFormat = YtDlpOptionResolver.audioFormat(options.format)
+                command.addAll(listOf("-f", selector, "--extract-audio", "--audio-format", audioFormat))
             }
             else -> {
-                val selector = when (options.quality.lowercase()) {
-                    "1080p" -> "bv*[height<=1080]+ba/b[height<=1080]"
-                    "720p" -> "bv*[height<=720]+ba/b[height<=720]"
-                    "480p" -> "bv*[height<=480]+ba/b[height<=480]"
-                    "worst" -> "worst"
-                    else -> "bv*+ba/b"
-                }
-                command.addAll(listOf("-f", selector, "--merge-output-format", options.format.trim().ifBlank { "mp4" }))
+                val selector = YtDlpOptionResolver.videoSelector(options.quality)
+                val videoFormat = YtDlpOptionResolver.videoFormat(options.format)
+                command.addAll(listOf("-f", selector, "--merge-output-format", videoFormat))
             }
         }
         if (options.sponsorBlock && !options.thumbnailOnly) {
@@ -95,12 +91,11 @@ class YtDlpService(private val config: AppConfig) {
     private fun selectOutputFile(workDir: Path, options: JobOptions): Path? {
         val files = Files.list(workDir).use { stream -> stream.filter { Files.isRegularFile(it) }.toList() }
         if (files.isEmpty()) return null
-        val preferred = when {
-            options.thumbnailOnly -> setOf("jpg", "jpeg", "png", "webp")
-            options.mode == DownloadMode.AUDIO -> setOf("mp3", "m4a", "opus", "aac", "flac", "wav", "webm")
-            else -> setOf("mp4", "mkv", "webm", "mov")
+        val preferred = YtDlpOptionResolver.preferredExtensions(options)
+        preferred.forEach { wanted ->
+            files.firstOrNull { ext(it) == wanted }?.let { return it }
         }
-        return files.firstOrNull { ext(it) in preferred } ?: files.maxByOrNull { Files.size(it) }
+        return files.maxByOrNull { Files.size(it) }
     }
 
     private fun isTitleLine(value: String): Boolean = value.isNotBlank() && !value.startsWith("[")
