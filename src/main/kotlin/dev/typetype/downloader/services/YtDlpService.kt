@@ -58,7 +58,7 @@ class YtDlpService(private val config: AppConfig) {
             else -> command.addAll(listOf("-f", "bv*+ba/b", "--merge-output-format", "mp4"))
         }
         if (options.sponsorBlock && !options.thumbnailOnly) {
-            command.addAll(listOf("--sponsorblock-remove", "sponsor,selfpromo,interaction,intro,outro,preview,filler,music_offtopic"))
+            command.addAll(listOf("--sponsorblock-remove", options.sponsorBlockCategories.joinToString(",")))
         }
         if (options.subtitles.enabled) {
             command.add("--write-subs")

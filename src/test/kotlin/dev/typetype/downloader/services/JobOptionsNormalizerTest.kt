@@ -19,4 +19,23 @@ class JobOptionsNormalizerTest {
         assertEquals(listOf("en", "fr"), normalized.subtitles.languages)
         assertEquals("vtt", normalized.subtitles.format)
     }
+
+    @Test
+    fun `fills default sponsorblock categories when enabled and empty`() {
+        val normalized = JobOptionsNormalizer.normalize(JobOptions(sponsorBlock = true))
+        assertEquals(
+            listOf("sponsor", "selfpromo", "interaction", "intro", "outro", "preview", "filler", "music_offtopic"),
+            normalized.sponsorBlockCategories,
+        )
+    }
+
+    @Test
+    fun `filters and normalizes custom sponsorblock categories`() {
+        val input = JobOptions(
+            sponsorBlock = true,
+            sponsorBlockCategories = listOf(" Sponsor ", "intro", "invalid", "INTRO"),
+        )
+        val normalized = JobOptionsNormalizer.normalize(input)
+        assertEquals(listOf("sponsor", "intro"), normalized.sponsorBlockCategories)
+    }
 }

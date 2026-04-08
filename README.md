@@ -94,6 +94,7 @@ All configuration is via environment variables.
   - `url` (required)
   - `options.mode` (`video` or `audio`)
   - `options.sponsorBlock` (`true`/`false`)
+  - `options.sponsorBlockCategories` (`sponsor,selfpromo,interaction,intro,outro,preview,filler,music_offtopic`)
   - `options.thumbnailOnly` (`true`/`false`)
   - `options.subtitles` (`enabled`, `auto`, `embed`, `languages`, `format`)
   and returns `{ "id": "...", "cached": false|true }`
