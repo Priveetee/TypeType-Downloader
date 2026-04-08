@@ -39,7 +39,11 @@ class JobServiceRecoveryTest {
     @Test
     fun `recovery requeues pending jobs with stored options`() {
         val one = row("a", JobStatus.QUEUED, JobOptionsCodec.encode(JobOptions(quality = "1080p")))
-        val two = row("b", JobStatus.RUNNING, JobOptionsCodec.encode(JobOptions(mode = dev.typetype.downloader.models.DownloadMode.AUDIO)))
+        val two = row(
+            "b",
+            JobStatus.RUNNING,
+            JobOptionsCodec.encode(JobOptions(mode = dev.typetype.downloader.models.DownloadMode.AUDIO, quality = "1080p", format = "avi")),
+        )
         val payloads = mutableListOf<String>()
         every { jobsRepository.listQueuedOrRunning() } returns listOf(one, two)
         every { redis.rpush("downloader:queue", capture(payloads)) } returns 1L
@@ -47,7 +51,11 @@ class JobServiceRecoveryTest {
         verify { jobsRepository.resetRunningToQueued() }
         verify { redis.del("downloader:queue") }
         verify(exactly = 2) { redis.setex(any(), 600L, "queued") }
-        assertEquals(setOf("a", "b"), payloads.mapNotNull { JobOptionsCodec.decodeQueue(it)?.id }.toSet())
+        val queued = payloads.mapNotNull { JobOptionsCodec.decodeQueue(it) }
+        assertEquals(setOf("a", "b"), queued.map { it.id }.toSet())
+        val recoveredAudio = queued.first { it.id == "b" }.options
+        assertEquals("best", recoveredAudio.quality)
+        assertEquals("mp3", recoveredAudio.format)
     }
 
     private fun row(id: String, status: JobStatus, optionsJson: String): JobRow = JobRow(

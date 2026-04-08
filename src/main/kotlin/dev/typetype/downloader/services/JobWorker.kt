@@ -25,7 +25,7 @@ class JobWorker(
                     val raw = item.getOrNull(1) ?: continue
                     val payload = JobOptionsCodec.decodeQueue(raw)
                     val id = payload?.id ?: raw
-                    val options = payload?.options ?: decodeStoredOptions(id)
+                    val options = payload?.options?.let(JobOptionsNormalizer::normalize) ?: decodeStoredOptions(id)
                     process(id, options)
                 }
             }
@@ -81,7 +81,7 @@ class JobWorker(
 
     private fun decodeStoredOptions(id: String): JobOptions {
         val row = jobsRepository.getById(id) ?: return JobOptions()
-        return runCatching { JobOptionsCodec.decode(row.optionsJson) }.getOrElse { JobOptions() }
+        return runCatching { JobOptionsCodec.decode(row.optionsJson) }.map(JobOptionsNormalizer::normalize).getOrElse { JobOptions() }
     }
 
     private fun uploadArtifact(cacheKey: String, filePath: java.nio.file.Path): StorageArtifact {
