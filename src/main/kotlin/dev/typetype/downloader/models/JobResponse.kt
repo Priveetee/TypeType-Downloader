@@ -10,4 +10,6 @@ data class JobResponse(
     val durationMs: Long,
     val title: String,
     val error: String? = null,
+    val artifactUrl: String? = null,
+    val artifactExpiresAt: String? = null,
 )

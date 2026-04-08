@@ -20,7 +20,6 @@ services:
 
   garage:
     image: dxflrs/garage:v2.2.0
-    command: ["server"]
     ports:
       - "3900:3900"
       - "3901:3901"

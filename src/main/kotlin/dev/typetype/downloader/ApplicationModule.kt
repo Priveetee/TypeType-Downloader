@@ -7,6 +7,9 @@ import dev.typetype.downloader.routes.healthRoutes
 import dev.typetype.downloader.routes.jobRoutes
 import dev.typetype.downloader.services.JobService
 import dev.typetype.downloader.services.JobWorker
+import dev.typetype.downloader.services.QueueSaturatedException
+import dev.typetype.downloader.services.GarageStorageService
+import dev.typetype.downloader.services.TokenServiceClient
 import dev.typetype.downloader.services.YtDlpService
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -24,15 +27,22 @@ fun Application.module() {
     val config = AppConfigLoader.load()
     Database.init(config)
     val redis = JedisPooled(config.redisHost, config.redisPort)
+    val storage = GarageStorageService(config)
+    storage.ensureBucket()
     val jobsRepository = JobsRepository()
     val ytDlpService = YtDlpService(config)
-    val jobService = JobService(jobsRepository, redis, config)
-    val worker = JobWorker(jobsRepository, redis, ytDlpService, config)
+    val tokenServiceClient = TokenServiceClient(config)
+    val jobService = JobService(jobsRepository, redis, storage, config)
+    val worker = JobWorker(jobsRepository, redis, ytDlpService, tokenServiceClient, storage, config)
+    jobService.recoverPendingJobs()
     worker.start()
 
     install(CallLogging)
     install(ContentNegotiation) { json() }
     install(StatusPages) {
+        exception<QueueSaturatedException> { call, cause ->
+            call.respond(HttpStatusCode.TooManyRequests, mapOf("error" to (cause.message ?: "queue saturated")))
+        }
         exception<IllegalArgumentException> { call, cause ->
             call.respond(HttpStatusCode.BadRequest, mapOf("error" to (cause.message ?: "bad request")))
         }
@@ -44,6 +54,7 @@ fun Application.module() {
     }
 
     monitor.subscribe(ApplicationStopping) {
+        storage.close()
         redis.close()
         Database.close()
     }
