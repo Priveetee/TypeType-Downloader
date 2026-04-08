@@ -92,6 +92,10 @@ All configuration is via environment variables.
 - `GET /health`
 - `POST /jobs` with `{ "url": "..." }` returns `{ "id": "...", "cached": false|true }`
 - `GET /jobs/{id}` returns one of `queued|running|done|failed` and includes a signed `artifactUrl` when available
+- `GET /jobs/{id}/artifact` redirects to signed Garage artifact URL when ready
+
+Wrapper URLs are resolved automatically. For example, frontend watch wrappers such as
+`https://watch.example/watch?v=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D...` are normalized to the underlying source URL before processing.
 
 ## License
 
