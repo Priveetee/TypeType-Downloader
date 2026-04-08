@@ -1,0 +1,8 @@
+.git
+.github
+build
+.gradle
+.kotlin
+AGENTS.md
+data
+*.md
