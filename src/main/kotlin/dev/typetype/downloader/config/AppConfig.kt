@@ -1,0 +1,52 @@
+package dev.typetype.downloader.config
+
+data class AppConfig(
+    val httpPort: Int,
+    val dbUrl: String,
+    val dbUser: String,
+    val dbPassword: String,
+    val redisHost: String,
+    val redisPort: Int,
+    val redisQueueKey: String,
+    val maxConcurrentWorkers: Int,
+    val maxQueueSize: Long,
+    val jobTtlSeconds: Long,
+    val ytdlpBin: String,
+    val ytdlpTimeoutSeconds: Long,
+    val enableTranscode: Boolean,
+    val s3Endpoint: String,
+    val s3Region: String,
+    val s3Bucket: String,
+    val s3AccessKey: String,
+    val s3SecretKey: String,
+    val s3ArtifactTtlSeconds: Long,
+    val tokenServiceUrl: String,
+)
+
+object AppConfigLoader {
+    fun load(): AppConfig = AppConfig(
+        httpPort = env("HTTP_PORT", "18093").toInt(),
+        dbUrl = env("DB_URL", "jdbc:postgresql://localhost:55432/typetype_downloader"),
+        dbUser = env("DB_USER", "typetype"),
+        dbPassword = env("DB_PASSWORD", "typetype"),
+        redisHost = env("REDIS_HOST", "localhost"),
+        redisPort = env("REDIS_PORT", "56379").toInt(),
+        redisQueueKey = env("REDIS_QUEUE_KEY", "downloader:queue"),
+        maxConcurrentWorkers = env("MAX_CONCURRENT_WORKERS", "2").toInt(),
+        maxQueueSize = env("MAX_QUEUE_SIZE", "100").toLong(),
+        jobTtlSeconds = env("JOB_TTL_SECONDS", "600").toLong(),
+        ytdlpBin = env("YTDLP_BIN", "yt-dlp"),
+        ytdlpTimeoutSeconds = env("YTDLP_TIMEOUT_SECONDS", "120").toLong(),
+        enableTranscode = env("ENABLE_TRANSCODE", "false").toBooleanStrictOrNull() ?: false,
+        s3Endpoint = env("S3_ENDPOINT", "http://localhost:3900"),
+        s3Region = env("S3_REGION", "garage"),
+        s3Bucket = env("S3_BUCKET", "typetype-downloads"),
+        s3AccessKey = env("S3_ACCESS_KEY", "change-me"),
+        s3SecretKey = env("S3_SECRET_KEY", "change-me"),
+        s3ArtifactTtlSeconds = env("S3_ARTIFACT_TTL_SECONDS", "7200").toLong(),
+        tokenServiceUrl = env("TOKEN_SERVICE_URL", "http://localhost:8081"),
+    )
+
+    private fun env(name: String, fallback: String): String =
+        System.getenv(name)?.takeIf { it.isNotBlank() } ?: fallback
+}
