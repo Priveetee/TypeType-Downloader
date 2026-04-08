@@ -90,8 +90,8 @@ All configuration is via environment variables.
 ## API
 
 - `GET /health`
-- `POST /jobs` with `{ "url": "..." }`
-- `GET /jobs/{id}`
+- `POST /jobs` with `{ "url": "..." }` returns `{ "id": "...", "cached": false|true }`
+- `GET /jobs/{id}` returns one of `queued|running|done|failed` and includes a signed `artifactUrl` when available
 
 ## License
 

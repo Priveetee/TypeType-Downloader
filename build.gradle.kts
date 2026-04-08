@@ -22,6 +22,7 @@ dependencies {
     implementation("org.postgresql:postgresql:42.7.8")
     implementation("com.zaxxer:HikariCP:6.3.0")
     implementation("redis.clients:jedis:6.1.0")
+    implementation("software.amazon.awssdk:s3:2.31.69")
     implementation("ch.qos.logback:logback-classic:1.5.20")
     testImplementation(kotlin("test"))
 }
