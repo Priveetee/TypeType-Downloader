@@ -1,7 +1,6 @@
 package dev.typetype.downloader.services
 
 import dev.typetype.downloader.config.AppConfig
-import dev.typetype.downloader.db.JobRow
 import dev.typetype.downloader.db.JobsRepository
 import dev.typetype.downloader.models.CreateJobResponse
 import dev.typetype.downloader.models.JobOptions
@@ -9,8 +8,6 @@ import dev.typetype.downloader.models.JobResponse
 import dev.typetype.downloader.models.JobStatus
 import redis.clients.jedis.JedisPooled
 import java.net.URI
-import java.time.Duration
-import java.time.Instant
 import java.util.UUID
 
 enum class CancelJobResult { NOT_FOUND, NOT_CANCELLABLE, CANCELLED }
@@ -49,7 +46,7 @@ class JobService(
 
     fun get(id: String): JobResponse? {
         val row = jobsRepository.getById(id) ?: return null
-        return row.toResponse(presignUrl(row), row.artifactExpiresAt?.toString())
+        return JobViewBuilder.build(row, storageService)
     }
 
     fun cancel(id: String): CancelJobResult {
@@ -97,24 +94,4 @@ class JobService(
     }
 
     private fun redisJobKey(id: String): String = "downloader:job:$id"
-
-    private fun presignUrl(row: JobRow): String? {
-        val key = row.artifactKey ?: return null
-        val expiresAt = row.artifactExpiresAt ?: return null
-        val now = Instant.now()
-        if (expiresAt <= now) return null
-        val seconds = Duration.between(now, expiresAt).seconds.coerceIn(1, 900)
-        return storageService.presignGet(key, Duration.ofSeconds(seconds))
-    }
-
-    private fun JobRow.toResponse(artifactUrl: String?, artifactExpiresAt: String?): JobResponse = JobResponse(
-        id = id,
-        url = url,
-        status = status,
-        durationMs = durationMs,
-        title = title,
-        error = error,
-        artifactUrl = artifactUrl,
-        artifactExpiresAt = artifactExpiresAt,
-    )
 }

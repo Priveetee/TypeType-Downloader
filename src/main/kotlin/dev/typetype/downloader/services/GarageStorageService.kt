@@ -75,8 +75,12 @@ class GarageStorageService(config: AppConfig) {
         s3.putObject(request, RequestBody.fromFile(filePath))
     }
 
-    fun presignGet(objectKey: String, duration: Duration): String {
-        val getRequest = GetObjectRequest.builder().bucket(bucket).key(objectKey).build()
+    fun presignGet(objectKey: String, duration: Duration, fileName: String? = null): String {
+        val requestBuilder = GetObjectRequest.builder().bucket(bucket).key(objectKey)
+        if (!fileName.isNullOrBlank()) {
+            requestBuilder.responseContentDisposition("attachment; filename=\"$fileName\"")
+        }
+        val getRequest = requestBuilder.build()
         val presignRequest = GetObjectPresignRequest.builder().signatureDuration(duration).getObjectRequest(getRequest).build()
         return presigner.presignGetObject(presignRequest).url().toString()
     }

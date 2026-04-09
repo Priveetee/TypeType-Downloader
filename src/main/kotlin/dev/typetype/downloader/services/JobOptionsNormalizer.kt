@@ -24,27 +24,54 @@ object JobOptionsNormalizer {
     private val allowedSponsorBlockCategories = defaultSponsorBlockCategories.toSet()
 
     fun normalize(options: JobOptions): JobOptions {
-        val quality = normalizeQuality(options)
         val format = normalizeFormat(options)
+        val quality = normalizeQuality(options)
+        val videoItag = normalizeItag(options.videoItag)
+        val audioItag = normalizeItag(options.audioItag)
+        val height = normalizePositive(options.height, max = 4320)
+        val fps = normalizePositive(options.fps, max = 240)
+        val bitrate = normalizePositive(options.bitrate, max = 500_000)
+        val videoCodec = normalizeCodec(options.videoCodec)
+        val audioCodec = normalizeCodec(options.audioCodec)
         val subtitles = normalizeSubtitles(options.subtitles)
         val sponsorBlockCategories = normalizeSponsorBlockCategories(options)
+        if (options.thumbnailOnly) {
+            return options.copy(
+                quality = "best",
+                format = "",
+                videoItag = "",
+                audioItag = "",
+                height = null,
+                fps = null,
+                videoCodec = "",
+                audioCodec = "",
+                bitrate = null,
+                subtitles = SubtitlesOptions(),
+                sponsorBlockCategories = emptyList(),
+            )
+        }
         return options.copy(
             quality = quality,
             format = format,
+            videoItag = videoItag,
+            audioItag = audioItag,
+            height = height,
+            fps = fps,
+            videoCodec = videoCodec,
+            audioCodec = audioCodec,
+            bitrate = bitrate,
             subtitles = subtitles,
             sponsorBlockCategories = sponsorBlockCategories,
         )
     }
 
     private fun normalizeQuality(options: JobOptions): String {
-        if (options.thumbnailOnly) return "best"
         val raw = options.quality.trim().lowercase().ifBlank { "best" }
         val allowed = if (options.mode == DownloadMode.AUDIO) allowedAudioQualities else allowedVideoQualities
         return if (raw in allowed) raw else "best"
     }
 
     private fun normalizeFormat(options: JobOptions): String {
-        if (options.thumbnailOnly) return ""
         val raw = options.format.trim().lowercase()
         if (options.mode == DownloadMode.AUDIO) {
             if (raw.isBlank()) return "mp3"
@@ -52,6 +79,23 @@ object JobOptionsNormalizer {
         }
         if (raw.isBlank()) return "mp4"
         return if (raw in allowedVideoFormats) raw else "mp4"
+    }
+
+    private fun normalizeItag(raw: String): String {
+        val value = raw.trim()
+        return if (value.all { it.isDigit() }) value else ""
+    }
+
+    private fun normalizeCodec(raw: String): String {
+        val value = raw.trim().lowercase()
+        if (value.isBlank()) return ""
+        return if (value.all { it.isLetterOrDigit() || it == '.' || it == '_' || it == '-' }) value else ""
+    }
+
+    private fun normalizePositive(value: Int?, max: Int): Int? {
+        val current = value ?: return null
+        if (current <= 0) return null
+        return if (current > max) max else current
     }
 
     private fun normalizeSubtitles(input: SubtitlesOptions): SubtitlesOptions {
@@ -62,7 +106,7 @@ object JobOptionsNormalizer {
     }
 
     private fun normalizeSponsorBlockCategories(options: JobOptions): List<String> {
-        if (!options.sponsorBlock) return emptyList()
+        if (!options.sponsorBlock || options.thumbnailOnly) return emptyList()
         val custom = options.sponsorBlockCategories
             .map { it.trim().lowercase() }
             .filter { it in allowedSponsorBlockCategories }

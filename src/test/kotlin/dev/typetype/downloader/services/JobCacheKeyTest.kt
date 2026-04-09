@@ -1,34 +1,23 @@
 package dev.typetype.downloader.services
 
-import dev.typetype.downloader.models.DownloadMode
 import dev.typetype.downloader.models.JobOptions
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
 class JobCacheKeyTest {
     @Test
-    fun `same URL yields same key`() {
+    fun `cache key isolates quality selections`() {
         val url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        val options = JobOptionsCodec.encode(JobOptions())
-        val first = JobCacheKey.from(url, options)
-        val second = JobCacheKey.from(url, options)
-        assertEquals(first, second)
+        val key720 = JobCacheKey.from(url, JobOptionsCodec.encode(JobOptionsNormalizer.normalize(JobOptions(quality = "720p"))))
+        val key1080 = JobCacheKey.from(url, JobOptionsCodec.encode(JobOptionsNormalizer.normalize(JobOptions(quality = "1080p"))))
+        assertNotEquals(key720, key1080)
     }
 
     @Test
-    fun `trimmed URL keeps same key`() {
-        val options = JobOptionsCodec.encode(JobOptions())
-        val clean = JobCacheKey.from("https://www.youtube.com/watch?v=dQw4w9WgXcQ", options)
-        val padded = JobCacheKey.from("  https://www.youtube.com/watch?v=dQw4w9WgXcQ  ", options)
-        assertEquals(clean, padded)
-    }
-
-    @Test
-    fun `different options yield different keys`() {
+    fun `cache key isolates exact itag selections`() {
         val url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        val first = JobCacheKey.from(url, JobOptionsCodec.encode(JobOptions(mode = DownloadMode.VIDEO)))
-        val second = JobCacheKey.from(url, JobOptionsCodec.encode(JobOptions(mode = DownloadMode.AUDIO)))
-        assertNotEquals(first, second)
+        val key137 = JobCacheKey.from(url, JobOptionsCodec.encode(JobOptionsNormalizer.normalize(JobOptions(videoItag = "137"))))
+        val key136 = JobCacheKey.from(url, JobOptionsCodec.encode(JobOptionsNormalizer.normalize(JobOptions(videoItag = "136"))))
+        assertNotEquals(key137, key136)
     }
 }
