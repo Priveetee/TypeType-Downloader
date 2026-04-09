@@ -34,7 +34,11 @@ class YtDlpService(private val config: AppConfig) {
         val output = process.inputStream.bufferedReader().readLines()
         if (process.exitValue() != 0) {
             deleteDirectory(workDir)
-            val error = output.lastOrNull { it.isNotBlank() } ?: "yt-dlp failed"
+            val error = if (output.any { it.contains("Requested format is not available", ignoreCase = true) }) {
+                "exact selection unavailable: requested format is not available"
+            } else {
+                output.lastOrNull { it.isNotBlank() } ?: "yt-dlp failed"
+            }
             return YtDlpResult(title = "", filePath = null, error = error)
         }
         val filePath = selectOutputFile(workDir, options)
@@ -61,12 +65,12 @@ class YtDlpService(private val config: AppConfig) {
         when {
             options.thumbnailOnly -> command.addAll(listOf("--skip-download", "--write-thumbnail"))
             options.mode == DownloadMode.AUDIO -> {
-                val selector = YtDlpOptionResolver.audioSelector(options.quality)
+                val selector = YtDlpOptionResolver.audioSelector(options)
                 val audioFormat = YtDlpOptionResolver.audioFormat(options.format)
                 command.addAll(listOf("-f", selector, "--extract-audio", "--audio-format", audioFormat))
             }
             else -> {
-                val selector = YtDlpOptionResolver.videoSelector(options.quality)
+                val selector = YtDlpOptionResolver.videoSelector(options)
                 val videoFormat = YtDlpOptionResolver.videoFormat(options.format)
                 command.addAll(listOf("-f", selector, "--merge-output-format", videoFormat))
             }

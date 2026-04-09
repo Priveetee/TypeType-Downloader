@@ -59,10 +59,12 @@ class JobOptionsNormalizerTest {
     @Test
     fun `thumbnail only ignores quality and format`() {
         val normalized = JobOptionsNormalizer.normalize(
-            JobOptions(thumbnailOnly = true, quality = "1080p", format = "webm"),
+            JobOptions(thumbnailOnly = true, quality = "1080p", format = "webm", videoItag = "137", height = 1080),
         )
         assertEquals("best", normalized.quality)
         assertEquals("", normalized.format)
+        assertEquals("", normalized.videoItag)
+        assertEquals(null, normalized.height)
     }
 
     @Test
@@ -73,5 +75,27 @@ class JobOptionsNormalizerTest {
             )
         )
         assertEquals(SubtitlesOptions(), normalized.subtitles)
+    }
+
+    @Test
+    fun `normalizes exact selection fields`() {
+        val normalized = JobOptionsNormalizer.normalize(
+            JobOptions(
+                videoItag = " 137 ",
+                audioItag = "abc",
+                height = 1080,
+                fps = -5,
+                videoCodec = " avc1.640028 ",
+                audioCodec = " mp4a.40.2 ",
+                bitrate = 0,
+            ),
+        )
+        assertEquals("137", normalized.videoItag)
+        assertEquals("", normalized.audioItag)
+        assertEquals(1080, normalized.height)
+        assertEquals(null, normalized.fps)
+        assertEquals("avc1.640028", normalized.videoCodec)
+        assertEquals("mp4a.40.2", normalized.audioCodec)
+        assertEquals(null, normalized.bitrate)
     }
 }
