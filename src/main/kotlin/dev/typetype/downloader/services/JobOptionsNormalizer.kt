@@ -87,7 +87,7 @@ object JobOptionsNormalizer {
     }
 
     private fun normalizeCodec(raw: String): String {
-        val value = raw.trim().lowercase()
+        val value = raw.trim()
         if (value.isBlank()) return ""
         return if (value.all { it.isLetterOrDigit() || it == '.' || it == '_' || it == '-' }) value else ""
     }

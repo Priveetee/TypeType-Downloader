@@ -98,4 +98,12 @@ class JobOptionsNormalizerTest {
         assertEquals("mp4a.40.2", normalized.audioCodec)
         assertEquals(null, normalized.bitrate)
     }
+
+    @Test
+    fun `keeps codec case for av1 profile strings`() {
+        val normalized = JobOptionsNormalizer.normalize(
+            JobOptions(videoCodec = "av01.0.08M.08"),
+        )
+        assertEquals("av01.0.08M.08", normalized.videoCodec)
+    }
 }
