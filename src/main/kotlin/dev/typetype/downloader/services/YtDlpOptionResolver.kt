@@ -10,7 +10,7 @@ object YtDlpOptionResolver {
     fun audioSelector(options: JobOptions): String {
         val audioItag = options.audioItag
         if (audioItag.isNotBlank()) {
-            val strict = "ba[format_id=$audioItag]/b[format_id=$audioItag]"
+            val strict = "ba[format_id='$audioItag']/b[format_id='$audioItag']"
             return if (options.allowQualityFallback) "$strict/bestaudio/best" else strict
         }
         return if (options.quality.lowercase() == "worst") "worstaudio/worst" else "bestaudio/best"
@@ -33,8 +33,8 @@ object YtDlpOptionResolver {
     private fun exactVideoSelector(options: JobOptions): String {
         val videoFilters = mutableListOf<String>()
         val audioFilters = mutableListOf<String>()
-        options.videoItag.takeIf { it.isNotBlank() }?.let { videoFilters += "[format_id=$it]" }
-        options.audioItag.takeIf { it.isNotBlank() }?.let { audioFilters += "[format_id=$it]" }
+        options.videoItag.takeIf { it.isNotBlank() }?.let { videoFilters += "[format_id='$it']" }
+        options.audioItag.takeIf { it.isNotBlank() }?.let { audioFilters += "[format_id='$it']" }
         options.height?.let { videoFilters += "[height=$it]" }
         options.fps?.let { videoFilters += "[fps=$it]" }
         options.videoCodec.takeIf { it.isNotBlank() }?.let { videoFilters += "[vcodec^=$it]" }
@@ -43,7 +43,7 @@ object YtDlpOptionResolver {
         val video = "bv*${videoFilters.joinToString("")}"
         val audio = "ba${audioFilters.joinToString("")}"
         return if (options.videoItag.isNotBlank() && options.audioItag.isBlank()) {
-            "$video+$audio/b[format_id=${options.videoItag}]"
+            "$video+$audio/b[format_id='${options.videoItag}']"
         } else {
             "$video+$audio"
         }

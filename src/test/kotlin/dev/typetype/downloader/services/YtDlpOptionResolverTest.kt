@@ -11,7 +11,7 @@ class YtDlpOptionResolverTest {
         assertEquals("worstaudio/worst", YtDlpOptionResolver.audioSelector(JobOptions(mode = DownloadMode.AUDIO, quality = "worst")))
         assertEquals("bestaudio/best", YtDlpOptionResolver.audioSelector(JobOptions(mode = DownloadMode.AUDIO, quality = "best")))
         assertEquals(
-            "ba[format_id=251]/b[format_id=251]",
+            "ba[format_id='251']/b[format_id='251']",
             YtDlpOptionResolver.audioSelector(JobOptions(mode = DownloadMode.AUDIO, audioItag = "251")),
         )
         assertEquals("mp3", YtDlpOptionResolver.audioFormat("avi"))
@@ -30,7 +30,7 @@ class YtDlpOptionResolverTest {
         )
         assertEquals("bv*+ba/b", YtDlpOptionResolver.videoSelector(JobOptions(mode = DownloadMode.VIDEO, quality = "best")))
         assertEquals(
-            "bv*[format_id=137]+ba[format_id=140]",
+            "bv*[format_id='137']+ba[format_id='140']",
             YtDlpOptionResolver.videoSelector(JobOptions(mode = DownloadMode.VIDEO, videoItag = "137", audioItag = "140")),
         )
         assertEquals("mp4", YtDlpOptionResolver.videoFormat("unknown"))
