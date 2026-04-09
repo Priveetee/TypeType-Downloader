@@ -10,6 +10,13 @@ data class JobResponse(
     val durationMs: Long,
     val title: String,
     val error: String? = null,
+    val errorCode: String? = null,
     val artifactUrl: String? = null,
     val artifactExpiresAt: String? = null,
+    val resolved: ResolvedOutput? = null,
+    val progressPercent: Int? = null,
+    val downloadedBytes: Long? = null,
+    val totalBytes: Long? = null,
+    val etaSeconds: Long? = null,
+    val stage: String? = null,
 )
