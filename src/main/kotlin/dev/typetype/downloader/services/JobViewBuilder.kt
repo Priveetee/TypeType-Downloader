@@ -44,7 +44,7 @@ object JobViewBuilder {
     private fun resolved(row: JobRow, options: JobOptions, fileName: String?): ResolvedOutput = ResolvedOutput(
         videoItag = options.videoItag.ifBlank { null },
         audioItag = options.audioItag.ifBlank { null },
-        height = options.height ?: qualityHeight(options.quality),
+        height = options.height ?: if (options.allowQualityFallback) null else qualityHeight(options.quality),
         fps = options.fps,
         videoCodec = options.videoCodec.ifBlank { null },
         audioCodec = options.audioCodec.ifBlank { null },
