@@ -38,7 +38,7 @@ class JobWorker(
         redis.setex(redisJobKey(id), config.jobTtlSeconds, "running")
         try {
             val startedAt = System.nanoTime()
-            val token = tokenServiceClient.fetchForUrl(job.url)
+            val token = if (shouldUseTokenFor(options)) tokenServiceClient.fetchForUrl(job.url) else null
             val result = ytDlpService.download(job.url, token, options) {
                 jobsRepository.getById(id)?.status != JobStatus.RUNNING
             }
@@ -82,6 +82,13 @@ class JobWorker(
     private fun decodeStoredOptions(id: String): JobOptions {
         val row = jobsRepository.getById(id) ?: return JobOptions()
         return runCatching { JobOptionsCodec.decode(row.optionsJson) }.map(JobOptionsNormalizer::normalize).getOrElse { JobOptions() }
+    }
+
+    private fun shouldUseTokenFor(options: JobOptions): Boolean {
+        val hasExactSelection = options.videoItag.isNotBlank() || options.audioItag.isNotBlank() ||
+            options.height != null || options.fps != null || options.videoCodec.isNotBlank() ||
+            options.audioCodec.isNotBlank() || options.bitrate != null
+        return !hasExactSelection
     }
 
     private fun uploadArtifact(cacheKey: String, filePath: java.nio.file.Path): StorageArtifact {
