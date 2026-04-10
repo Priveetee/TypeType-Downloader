@@ -21,7 +21,14 @@ class ArtifactUploadExecutorTest {
         every { repo.markFinishedIfRunning(any(), any(), any(), any(), any(), any(), any()) } returns true
         val executor = ArtifactUploadExecutor(config, storage, repo, statusLoop, progress)
         val result = YtDlpResult(title = "t", filePath = file, error = null, progress = JobProgressState(stage = "finalizing"))
-        executor.submitDone("id-1", "cache-k", file, System.nanoTime(), result)
+        executor.submitDone(
+            id = "id-1",
+            cacheKey = "cache-k",
+            filePath = file,
+            startedAtNs = System.nanoTime(),
+            result = result,
+            metrics = DownloadPhaseMetrics(),
+        )
         executor.stop()
         verify { repo.markFinishedIfRunning("id-1", JobStatus.DONE, any(), "t", null, any(), any()) }
         verify { statusLoop.markFinished("id-1", any()) }
@@ -43,6 +50,15 @@ class ArtifactUploadExecutorTest {
         jobTtlSeconds = 600,
         ytdlpBin = "yt-dlp",
         ytdlpTimeoutSeconds = 60,
+        ytdlpConcurrentFragments = 1,
+        ytdlpRetries = 10,
+        ytdlpFragmentRetries = 10,
+        ytdlpSocketTimeoutSeconds = 30,
+        ytdlpHttpChunkSize = "",
+        ytdlpExternalDownloader = "",
+        ytdlpExternalDownloaderArgs = "",
+        audioPassthroughDefault = false,
+        tokenCacheTtlSeconds = 600,
         enableTranscode = false,
         s3Endpoint = "http://localhost:3900",
         s3Region = "garage",

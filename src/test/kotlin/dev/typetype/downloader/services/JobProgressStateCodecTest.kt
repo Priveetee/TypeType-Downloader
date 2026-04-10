@@ -19,6 +19,10 @@ class JobProgressStateCodecTest {
             fps = 60.0,
             container = "mp4",
             formatId = "137+251",
+            tokenFetchMs = 25,
+            ytdlpMs = 1800,
+            uploadMs = 450,
+            totalMs = 2275,
         )
         val encoded = JobProgressStateCodec.encode(state)
         val decoded = JobProgressStateCodec.decode(encoded)

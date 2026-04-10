@@ -5,29 +5,39 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
-class JobProgressStoreTest {
+class TokenCacheStoreTest {
     @Test
-    fun `throttles high frequency writes with unchanged stage and tiny deltas`() {
+    fun `stores and reads cached token`() {
         val redis = mockk<redis.clients.jedis.JedisPooled>(relaxed = true)
-        every { redis.setex(any<String>(), any<Long>(), any<String>()) } returns "OK"
-        val store = JobProgressStore(redis, config())
-        store.update("job-1", JobProgressState(stage = "downloading", progressPercent = 10, downloadedBytes = 1000, totalBytes = 10_000))
-        store.update("job-1", JobProgressState(stage = "downloading", progressPercent = 10, downloadedBytes = 1100, totalBytes = 10_000))
-        verify(exactly = 1) { redis.setex("downloader:progress:job-1", 600L, any()) }
+        val config = config(tokenCacheTtlSeconds = 300)
+        val store = TokenCacheStore(redis, config)
+        val token = TokenPayload(visitorData = "visitor", streamingPot = "pot")
+
+        every { redis.get("downloader:token:video-1") } returns "visitor|pot"
+
+        store.put("video-1", token)
+        val loaded = store.get("video-1")
+
+        assertNotNull(loaded)
+        assertEquals("visitor", loaded.visitorData)
+        assertEquals("pot", loaded.streamingPot)
+        verify { redis.setex("downloader:token:video-1", 300L, "visitor|pot") }
     }
 
     @Test
-    fun `writes immediately when stage changes`() {
+    fun `disabled cache ttl skips write and read`() {
         val redis = mockk<redis.clients.jedis.JedisPooled>(relaxed = true)
-        every { redis.setex(any<String>(), any<Long>(), any<String>()) } returns "OK"
-        val store = JobProgressStore(redis, config())
-        store.update("job-2", JobProgressState(stage = "downloading", progressPercent = 70))
-        store.update("job-2", JobProgressState(stage = "merging", progressPercent = 90))
-        verify(exactly = 2) { redis.setex("downloader:progress:job-2", 600L, any()) }
+        val store = TokenCacheStore(redis, config(tokenCacheTtlSeconds = 0))
+        store.put("video-2", TokenPayload(visitorData = "v", streamingPot = "p"))
+        assertNull(store.get("video-2"))
+        verify(exactly = 0) { redis.setex(any<String>(), any<Long>(), any<String>()) }
     }
 
-    private fun config(): AppConfig = AppConfig(
+    private fun config(tokenCacheTtlSeconds: Long): AppConfig = AppConfig(
         httpPort = 18093,
         dbUrl = "jdbc:postgresql://localhost:55432/typetype_downloader",
         dbUser = "typetype",
@@ -37,12 +47,12 @@ class JobProgressStoreTest {
         redisHost = "localhost",
         redisPort = 56379,
         redisQueueKey = "downloader:queue",
-        maxConcurrentWorkers = 2,
-        uploadConcurrency = 2,
+        maxConcurrentWorkers = 1,
+        uploadConcurrency = 1,
         maxQueueSize = 100,
         jobTtlSeconds = 600,
         ytdlpBin = "yt-dlp",
-        ytdlpTimeoutSeconds = 60,
+        ytdlpTimeoutSeconds = 120,
         ytdlpConcurrentFragments = 1,
         ytdlpRetries = 10,
         ytdlpFragmentRetries = 10,
@@ -51,7 +61,7 @@ class JobProgressStoreTest {
         ytdlpExternalDownloader = "",
         ytdlpExternalDownloaderArgs = "",
         audioPassthroughDefault = false,
-        tokenCacheTtlSeconds = 600,
+        tokenCacheTtlSeconds = tokenCacheTtlSeconds,
         enableTranscode = false,
         s3Endpoint = "http://localhost:3900",
         s3Region = "garage",

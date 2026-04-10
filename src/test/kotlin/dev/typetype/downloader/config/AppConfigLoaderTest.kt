@@ -29,5 +29,11 @@ class AppConfigLoaderTest {
         assertEquals(8, config.dbPoolSize)
         assertEquals(1, config.dbMinIdle)
         assertEquals(2, config.uploadConcurrency)
+        assertEquals(1, config.ytdlpConcurrentFragments)
+        assertEquals(10, config.ytdlpRetries)
+        assertEquals(10, config.ytdlpFragmentRetries)
+        assertEquals(30, config.ytdlpSocketTimeoutSeconds)
+        assertEquals(false, config.audioPassthroughDefault)
+        assertEquals(600, config.tokenCacheTtlSeconds)
     }
 }

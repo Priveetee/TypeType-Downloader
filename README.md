@@ -81,6 +81,15 @@ All configuration is via environment variables.
 | `JOB_TTL_SECONDS` | `600` | TTL for transient job cache entries |
 | `YTDLP_BIN` | `yt-dlp` | yt-dlp executable path |
 | `YTDLP_TIMEOUT_SECONDS` | `120` | Per-job yt-dlp timeout |
+| `YTDLP_CONCURRENT_FRAGMENTS` | `1` | `yt-dlp -N` fragment concurrency |
+| `YTDLP_RETRIES` | `10` | `yt-dlp --retries` value |
+| `YTDLP_FRAGMENT_RETRIES` | `10` | `yt-dlp --fragment-retries` value |
+| `YTDLP_SOCKET_TIMEOUT_SECONDS` | `30` | `yt-dlp --socket-timeout` value |
+| `YTDLP_HTTP_CHUNK_SIZE` | `` | Optional `yt-dlp --http-chunk-size` |
+| `YTDLP_EXTERNAL_DOWNLOADER` | `` | Optional external downloader (ex `aria2c`) |
+| `YTDLP_EXTERNAL_DOWNLOADER_ARGS` | `` | Optional downloader args (ex `aria2c:-x16 -s16 -k1M`) |
+| `AUDIO_PASSTHROUGH_DEFAULT` | `false` | For audio jobs without explicit format, skip re-encode and keep source audio stream |
+| `TOKEN_CACHE_TTL_SECONDS` | `600` | Redis TTL for cached YouTube poToken by video id |
 | `ENABLE_TRANSCODE` | `false` | Toggle ffmpeg transcode flows |
 | `S3_ENDPOINT` | `http://localhost:3900` | Garage S3 endpoint |
 | `S3_REGION` | `garage` | S3 region |
@@ -96,6 +105,7 @@ All configuration is via environment variables.
 - `POST /jobs` accepts:
   - `url` (required)
   - `options.mode` (`video` or `audio`)
+  - `options.audioPassthrough` (`true`/`false`, audio only)
   - `options.sponsorBlock` (`true`/`false`)
   - `options.sponsorBlockCategories` (`sponsor,selfpromo,interaction,intro,outro,preview,filler,music_offtopic`)
   - `options.thumbnailOnly` (`true`/`false`)
@@ -104,6 +114,8 @@ All configuration is via environment variables.
 - `GET /jobs/{id}` returns one of `queued|running|done|failed` and includes a signed `artifactUrl` when available
 - `GET /jobs/{id}/artifact` redirects to signed Garage artifact URL when ready
 - `GET /jobs/{id}/events` returns SSE stream with live `JobResponse` progress payloads
+
+`JobResponse` and SSE progress payloads include phase timing fields `tokenFetchMs`, `ytdlpMs`, `uploadMs`, and `totalMs` to diagnose backend bottlenecks.
 
 Wrapper URLs are resolved automatically. For example, frontend watch wrappers such as
 `https://watch.example/watch?v=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D...` are normalized to the underlying source URL before processing.
