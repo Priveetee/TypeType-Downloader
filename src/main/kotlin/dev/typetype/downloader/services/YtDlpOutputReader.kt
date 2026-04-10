@@ -92,6 +92,10 @@ class YtDlpOutputReader(
             fps = update.fps ?: previous?.fps,
             container = update.container ?: previous?.container,
             formatId = update.formatId ?: previous?.formatId,
+            tokenFetchMs = previous?.tokenFetchMs,
+            ytdlpMs = previous?.ytdlpMs,
+            uploadMs = previous?.uploadMs,
+            totalMs = previous?.totalMs,
         )
     }
 }

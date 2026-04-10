@@ -5,6 +5,15 @@ import dev.typetype.downloader.models.JobStatus
 object WorkerProgressComposer {
     fun running(): JobProgressState = JobProgressState(stage = "running", progressPercent = 1)
 
+    fun running(metrics: DownloadPhaseMetrics): JobProgressState = JobProgressState(
+        stage = "running",
+        progressPercent = 1,
+        tokenFetchMs = metrics.tokenFetchMs,
+        ytdlpMs = metrics.ytdlpMs,
+        uploadMs = metrics.uploadMs,
+        totalMs = metrics.totalMs,
+    )
+
     fun finalizing(result: YtDlpResult): JobProgressState = JobProgressState(
         stage = "finalizing",
         progressPercent = 100,
@@ -32,9 +41,20 @@ object WorkerProgressComposer {
                 container = artifact?.objectKey?.substringAfterLast('.', result.progress?.container.orEmpty())
                     ?.takeIf { it.isNotBlank() },
                 formatId = result.progress?.formatId,
+                tokenFetchMs = result.progress?.tokenFetchMs,
+                ytdlpMs = result.progress?.ytdlpMs,
+                uploadMs = result.progress?.uploadMs,
+                totalMs = result.progress?.totalMs,
             )
         }
-        return JobProgressState(stage = "failed", progressPercent = result.progress?.progressPercent)
+        return JobProgressState(
+            stage = "failed",
+            progressPercent = result.progress?.progressPercent,
+            tokenFetchMs = result.progress?.tokenFetchMs,
+            ytdlpMs = result.progress?.ytdlpMs,
+            uploadMs = result.progress?.uploadMs,
+            totalMs = result.progress?.totalMs,
+        )
     }
 
     fun failed(): JobProgressState = JobProgressState(stage = "failed", progressPercent = null)

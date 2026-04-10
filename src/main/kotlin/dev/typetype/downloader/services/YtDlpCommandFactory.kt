@@ -17,15 +17,35 @@ object YtDlpCommandFactory {
             "TT_TITLE:%(title)s",
             "--print",
             "TT_META:%(format_id)s|%(vcodec)s|%(acodec)s|%(fps)s|%(ext)s",
+            "--concurrent-fragments",
+            config.ytdlpConcurrentFragments.coerceAtLeast(1).toString(),
+            "--retries",
+            config.ytdlpRetries.coerceAtLeast(0).toString(),
+            "--fragment-retries",
+            config.ytdlpFragmentRetries.coerceAtLeast(0).toString(),
+            "--socket-timeout",
+            config.ytdlpSocketTimeoutSeconds.coerceAtLeast(1).toString(),
             "-o",
             "${workDir.toAbsolutePath()}/%(id)s.%(ext)s",
         )
+        config.ytdlpHttpChunkSize.trim().takeIf { it.isNotBlank() }?.let {
+            command.addAll(listOf("--http-chunk-size", it))
+        }
+        config.ytdlpExternalDownloader.trim().takeIf { it.isNotBlank() }?.let {
+            command.addAll(listOf("--downloader", it))
+        }
+        config.ytdlpExternalDownloaderArgs.trim().takeIf { it.isNotBlank() }?.let {
+            command.addAll(listOf("--downloader-args", it))
+        }
         when {
             options.thumbnailOnly -> command.addAll(listOf("--skip-download", "--write-thumbnail"))
             options.mode == DownloadMode.AUDIO -> {
                 val selector = YtDlpOptionResolver.audioSelector(options)
-                val audioFormat = YtDlpOptionResolver.audioFormat(options.format)
-                command.addAll(listOf("-f", selector, "--extract-audio", "--audio-format", audioFormat))
+                command.addAll(listOf("-f", selector))
+                if (!options.audioPassthrough) {
+                    val audioFormat = YtDlpOptionResolver.audioFormat(options.format)
+                    command.addAll(listOf("--extract-audio", "--audio-format", audioFormat))
+                }
             }
             else -> {
                 val selector = YtDlpOptionResolver.videoSelector(options)

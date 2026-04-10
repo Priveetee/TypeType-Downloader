@@ -11,7 +11,18 @@ data class YtDlpResult(
     val filePath: Path?,
     val error: String?,
     val progress: JobProgressState?,
-)
+) {
+    fun withMetrics(tokenFetchMs: Long, ytdlpMs: Long, uploadMs: Long = 0): YtDlpResult {
+        val current = progress ?: JobProgressState(stage = "running")
+        val updated = current.copy(
+            tokenFetchMs = tokenFetchMs,
+            ytdlpMs = ytdlpMs,
+            uploadMs = uploadMs,
+            totalMs = tokenFetchMs + ytdlpMs + uploadMs,
+        )
+        return copy(progress = updated)
+    }
+}
 
 class YtDlpService(private val config: AppConfig) {
     fun download(

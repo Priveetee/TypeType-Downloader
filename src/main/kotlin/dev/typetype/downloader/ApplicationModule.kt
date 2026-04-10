@@ -10,6 +10,7 @@ import dev.typetype.downloader.services.JobProgressStore
 import dev.typetype.downloader.services.JobWorker
 import dev.typetype.downloader.services.QueueSaturatedException
 import dev.typetype.downloader.services.GarageStorageService
+import dev.typetype.downloader.services.TokenCacheStore
 import dev.typetype.downloader.services.TokenServiceClient
 import dev.typetype.downloader.services.YtDlpService
 import io.ktor.http.HttpStatusCode
@@ -34,8 +35,9 @@ fun Application.module() {
     val progressStore = JobProgressStore(redis, config)
     val ytDlpService = YtDlpService(config)
     val tokenServiceClient = TokenServiceClient(config)
+    val tokenCacheStore = TokenCacheStore(redis, config)
     val jobService = JobService(jobsRepository, redis, storage, config, progressStore)
-    val worker = JobWorker(jobsRepository, redis, ytDlpService, tokenServiceClient, storage, config, progressStore)
+    val worker = JobWorker(jobsRepository, redis, ytDlpService, tokenServiceClient, tokenCacheStore, storage, config, progressStore)
     jobService.recoverPendingJobs()
     worker.start()
 

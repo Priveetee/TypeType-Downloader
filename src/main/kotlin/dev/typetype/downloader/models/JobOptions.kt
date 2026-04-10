@@ -7,6 +7,7 @@ data class JobOptions(
     val mode: DownloadMode = DownloadMode.VIDEO,
     val quality: String = "best",
     val format: String = "",
+    val audioPassthrough: Boolean = false,
     val videoItag: String = "",
     val audioItag: String = "",
     val height: Int? = null,

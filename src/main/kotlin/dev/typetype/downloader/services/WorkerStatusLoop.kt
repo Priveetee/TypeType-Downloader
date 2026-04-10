@@ -15,7 +15,9 @@ class WorkerStatusLoop(
             val raw = item.getOrNull(1) ?: continue
             val payload = JobOptionsCodec.decodeQueue(raw)
             val id = payload?.id ?: raw
-            val options = payload?.options?.let(JobOptionsNormalizer::normalize) ?: decodeStoredOptions(id)
+            val options = payload?.options
+                ?.let { JobOptionsNormalizer.normalize(it, audioPassthroughDefault = config.audioPassthroughDefault) }
+                ?: decodeStoredOptions(id)
             worker(id, options)
         }
     }

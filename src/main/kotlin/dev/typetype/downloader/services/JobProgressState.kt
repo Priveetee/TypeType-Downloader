@@ -16,6 +16,10 @@ data class JobProgressState(
     val fps: Double? = null,
     val container: String? = null,
     val formatId: String? = null,
+    val tokenFetchMs: Long? = null,
+    val ytdlpMs: Long? = null,
+    val uploadMs: Long? = null,
+    val totalMs: Long? = null,
 )
 
 object JobProgressStateCodec {

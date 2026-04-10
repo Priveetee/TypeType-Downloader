@@ -25,4 +25,8 @@ data class JobResponse(
     val finishedAt: String? = null,
     val queueWaitMs: Long? = null,
     val runTimeMs: Long? = null,
+    val tokenFetchMs: Long? = null,
+    val ytdlpMs: Long? = null,
+    val uploadMs: Long? = null,
+    val totalMs: Long? = null,
 )

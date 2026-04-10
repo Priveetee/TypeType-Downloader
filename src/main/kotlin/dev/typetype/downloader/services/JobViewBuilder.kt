@@ -46,6 +46,10 @@ object JobViewBuilder {
             finishedAt = row.finishedAt?.toString(),
             queueWaitMs = queueWaitMs,
             runTimeMs = runTimeMs,
+            tokenFetchMs = progress?.tokenFetchMs,
+            ytdlpMs = progress?.ytdlpMs,
+            uploadMs = progress?.uploadMs,
+            totalMs = progress?.totalMs,
         )
     }
 

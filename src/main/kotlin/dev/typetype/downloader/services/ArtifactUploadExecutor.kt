@@ -19,16 +19,30 @@ class ArtifactUploadExecutor(
         Thread(runnable, "upload-worker").apply { isDaemon = true }
     }
 
-    fun submitDone(id: String, cacheKey: String, filePath: Path, startedAtNs: Long, result: YtDlpResult) {
+    fun submitDone(
+        id: String,
+        cacheKey: String,
+        filePath: Path,
+        startedAtNs: Long,
+        result: YtDlpResult,
+        metrics: DownloadPhaseMetrics,
+    ) {
         uploadPool.submit {
+            val uploadStartedAt = System.nanoTime()
             val durationMs = elapsedMs(startedAtNs)
             runCatching {
                 val artifact = uploadArtifact(cacheKey, filePath)
+                val uploadMs = PhaseTiming.elapsedMs(uploadStartedAt)
+                val measured = result.withMetrics(
+                    tokenFetchMs = metrics.tokenFetchMs,
+                    ytdlpMs = metrics.ytdlpMs,
+                    uploadMs = uploadMs,
+                )
                 val updated = jobsRepository.markFinishedIfRunning(
                     id = id,
                     status = JobStatus.DONE,
                     durationMs = durationMs,
-                    title = result.title,
+                    title = measured.title,
                     error = null,
                     artifactKey = artifact.objectKey,
                     artifactExpiresAt = artifact.expiresAt,
@@ -37,7 +51,7 @@ class ArtifactUploadExecutor(
                     storageService.deleteObject(artifact.objectKey)
                 } else {
                     statusLoop.markFinished(id, "done:$durationMs")
-                    progressStore.update(id, WorkerProgressComposer.completed(JobStatus.DONE, result, artifact))
+                    progressStore.update(id, WorkerProgressComposer.completed(JobStatus.DONE, measured, artifact))
                 }
             }.onFailure { error ->
                 jobsRepository.markFinishedIfRunning(

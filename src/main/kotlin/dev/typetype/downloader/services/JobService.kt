@@ -27,7 +27,10 @@ class JobService(
     fun enqueue(url: String, requestedOptions: JobOptions): CreateJobResponse {
         val resolvedUrl = SourceUrlResolver.resolve(url)
         validateUrl(resolvedUrl)
-        val options = JobOptionsNormalizer.normalize(requestedOptions)
+        val options = JobOptionsNormalizer.normalize(
+            requestedOptions,
+            audioPassthroughDefault = config.audioPassthroughDefault,
+        )
         val optionsJson = JobOptionsCodec.encode(options)
         val cacheKey = JobCacheKey.from(resolvedUrl, optionsJson)
         val id = UUID.randomUUID().toString()

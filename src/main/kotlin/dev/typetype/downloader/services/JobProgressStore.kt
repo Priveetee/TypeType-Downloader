@@ -58,7 +58,11 @@ class JobProgressStore(
             previous.audioCodec == next.audioCodec &&
             previous.fps == next.fps &&
             previous.container == next.container &&
-            previous.formatId == next.formatId
+            previous.formatId == next.formatId &&
+            previous.tokenFetchMs == next.tokenFetchMs &&
+            previous.ytdlpMs == next.ytdlpMs &&
+            previous.uploadMs == next.uploadMs &&
+            previous.totalMs == next.totalMs
     }
 
     private data class Snapshot(

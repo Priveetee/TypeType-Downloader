@@ -40,7 +40,7 @@ class JobQueuePublisher(
         redis.pipelined().use { pipe ->
             rows.forEach { row ->
                 val options = runCatching { JobOptionsCodec.decode(row.optionsJson) }
-                    .map(JobOptionsNormalizer::normalize)
+                    .map { JobOptionsNormalizer.normalize(it, audioPassthroughDefault = config.audioPassthroughDefault) }
                     .getOrElse { JobOptions() }
                 val payload = JobOptionsCodec.encodeQueue(JobOptionsCodec.QueuePayload(id = row.id, options = options))
                 pipe.rpush(config.redisQueueKey, payload)
