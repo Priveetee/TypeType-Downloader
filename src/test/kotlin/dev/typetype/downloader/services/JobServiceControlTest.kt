@@ -15,7 +15,8 @@ class JobServiceControlTest {
     private val jobsRepository = mockk<JobsRepository>()
     private val redis = mockk<redis.clients.jedis.JedisPooled>(relaxed = true)
     private val storage = mockk<GarageStorageService>(relaxed = true)
-    private val service = JobService(jobsRepository, redis, storage, config())
+    private val progressStore = JobProgressStore(redis, config())
+    private val service = JobService(jobsRepository, redis, storage, config(), progressStore)
 
     @Test
     fun `cancel returns not found when job does not exist`() {
@@ -66,6 +67,9 @@ class JobServiceControlTest {
         error = null,
         artifactKey = artifactKey,
         artifactExpiresAt = Instant.now().plusSeconds(300),
+        createdAt = Instant.now().minusSeconds(60),
+        startedAt = Instant.now().minusSeconds(30),
+        finishedAt = null,
     )
 
     private fun config(): AppConfig = AppConfig(
@@ -73,10 +77,13 @@ class JobServiceControlTest {
         dbUrl = "jdbc:postgresql://localhost:55432/typetype_downloader",
         dbUser = "typetype",
         dbPassword = "typetype",
+        dbPoolSize = 8,
+        dbMinIdle = 1,
         redisHost = "localhost",
         redisPort = 56379,
         redisQueueKey = "downloader:queue",
         maxConcurrentWorkers = 2,
+        uploadConcurrency = 2,
         maxQueueSize = 100,
         jobTtlSeconds = 600,
         ytdlpBin = "yt-dlp",

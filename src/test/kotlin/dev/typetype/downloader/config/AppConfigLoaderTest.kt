@@ -14,8 +14,11 @@ class AppConfigLoaderTest {
         assertTrue(config.ytdlpBin.isNotBlank())
         assertTrue(config.s3Endpoint.isNotBlank())
         assertTrue(config.maxConcurrentWorkers >= 1)
+        assertTrue(config.uploadConcurrency >= 1)
         assertTrue(config.maxQueueSize >= 1)
         assertTrue(config.jobTtlSeconds >= 1)
+        assertTrue(config.dbPoolSize >= 1)
+        assertTrue(config.dbMinIdle >= 0)
     }
 
     @Test
@@ -23,5 +26,8 @@ class AppConfigLoaderTest {
         val config = AppConfigLoader.load()
         assertEquals("garage", config.s3Region)
         assertEquals("typetype-downloads", config.s3Bucket)
+        assertEquals(8, config.dbPoolSize)
+        assertEquals(1, config.dbMinIdle)
+        assertEquals(2, config.uploadConcurrency)
     }
 }

@@ -27,9 +27,12 @@ class JobViewBuilderTest {
             error = null,
             artifactKey = "cache/file.mp4",
             artifactExpiresAt = java.time.Instant.now().plusSeconds(600),
+            createdAt = java.time.Instant.now().minusSeconds(10),
+            startedAt = null,
+            finishedAt = null,
         )
 
-        val response = JobViewBuilder.build(row, storage)
+        val response = JobViewBuilder.build(row, storage, null)
         assertEquals("queued", response.stage)
         assertEquals(0, response.progressPercent)
         assertNotNull(response.resolved)

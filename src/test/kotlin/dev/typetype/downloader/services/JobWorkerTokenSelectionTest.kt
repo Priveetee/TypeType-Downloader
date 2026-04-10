@@ -41,10 +41,13 @@ class JobWorkerTokenSelectionTest {
             dbUrl = "jdbc:postgresql://localhost:55432/typetype_downloader",
             dbUser = "typetype",
             dbPassword = "typetype",
+            dbPoolSize = 8,
+            dbMinIdle = 1,
             redisHost = "localhost",
             redisPort = 56379,
             redisQueueKey = "downloader:queue",
             maxConcurrentWorkers = 1,
+            uploadConcurrency = 1,
             maxQueueSize = 10,
             jobTtlSeconds = 600,
             ytdlpBin = "yt-dlp",
@@ -58,5 +61,6 @@ class JobWorkerTokenSelectionTest {
             s3ArtifactTtlSeconds = 7200,
             tokenServiceUrl = "http://localhost:8081",
         ),
+        progressStore = io.mockk.mockk(relaxed = true),
     )
 }

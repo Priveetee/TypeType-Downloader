@@ -70,10 +70,13 @@ All configuration is via environment variables.
 | `DB_URL` | `jdbc:postgresql://localhost:55432/typetype_downloader` | PostgreSQL JDBC URL |
 | `DB_USER` | `typetype` | PostgreSQL user |
 | `DB_PASSWORD` | `typetype` | PostgreSQL password |
+| `DB_POOL_SIZE` | `8` | Hikari maximum pool size |
+| `DB_MIN_IDLE` | `1` | Hikari minimum idle connections |
 | `REDIS_HOST` | `localhost` | Dragonfly hostname |
 | `REDIS_PORT` | `56379` | Dragonfly port |
 | `REDIS_QUEUE_KEY` | `downloader:queue` | Queue key for enqueued jobs |
 | `MAX_CONCURRENT_WORKERS` | `2` | Worker count |
+| `UPLOAD_CONCURRENCY` | `2` | Parallel upload worker count |
 | `MAX_QUEUE_SIZE` | `100` | Queue saturation threshold |
 | `JOB_TTL_SECONDS` | `600` | TTL for transient job cache entries |
 | `YTDLP_BIN` | `yt-dlp` | yt-dlp executable path |
@@ -100,6 +103,7 @@ All configuration is via environment variables.
   and returns `{ "id": "...", "cached": false|true }`
 - `GET /jobs/{id}` returns one of `queued|running|done|failed` and includes a signed `artifactUrl` when available
 - `GET /jobs/{id}/artifact` redirects to signed Garage artifact URL when ready
+- `GET /jobs/{id}/events` returns SSE stream with live `JobResponse` progress payloads
 
 Wrapper URLs are resolved automatically. For example, frontend watch wrappers such as
 `https://watch.example/watch?v=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D...` are normalized to the underlying source URL before processing.
