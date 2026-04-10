@@ -57,6 +57,16 @@ class JobOptionsNormalizerTest {
     }
 
     @Test
+    fun `enables audio passthrough when default is active and format omitted`() {
+        val normalized = JobOptionsNormalizer.normalize(
+            JobOptions(mode = DownloadMode.AUDIO, format = ""),
+            audioPassthroughDefault = true,
+        )
+        assertEquals(true, normalized.audioPassthrough)
+        assertEquals("", normalized.format)
+    }
+
+    @Test
     fun `thumbnail only ignores quality and format`() {
         val normalized = JobOptionsNormalizer.normalize(
             JobOptions(thumbnailOnly = true, quality = "1080p", format = "webm", videoItag = "137", height = 1080),

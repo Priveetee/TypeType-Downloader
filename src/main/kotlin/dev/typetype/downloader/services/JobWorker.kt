@@ -5,8 +5,6 @@ import dev.typetype.downloader.db.JobsRepository
 import dev.typetype.downloader.models.JobOptions
 import dev.typetype.downloader.models.JobStatus
 import redis.clients.jedis.JedisPooled
-import java.nio.file.Files
-import java.time.Instant
 import kotlin.concurrent.thread
 
 class JobWorker(
@@ -14,20 +12,18 @@ class JobWorker(
     private val redis: JedisPooled,
     private val ytDlpService: YtDlpService,
     private val tokenServiceClient: TokenServiceClient,
+    private val tokenCacheStore: TokenCacheStore,
     private val storageService: GarageStorageService,
     private val config: AppConfig,
+    private val progressStore: JobProgressStore,
 ) {
+    private val statusLoop = WorkerStatusLoop(config, redis, progressStore)
+    private val uploadExecutor = ArtifactUploadExecutor(config, storageService, jobsRepository, statusLoop, progressStore)
+
     fun start() {
         repeat(config.maxConcurrentWorkers) { index ->
             thread(name = "job-worker-$index", isDaemon = true) {
-                while (true) {
-                    val item = redis.blpop(0, config.redisQueueKey) ?: continue
-                    val raw = item.getOrNull(1) ?: continue
-                    val payload = JobOptionsCodec.decodeQueue(raw)
-                    val id = payload?.id ?: raw
-                    val options = payload?.options?.let(JobOptionsNormalizer::normalize) ?: decodeStoredOptions(id)
-                    process(id, options)
-                }
+                statusLoop.run(::process, ::decodeStoredOptions)
             }
         }
     }
@@ -35,36 +31,54 @@ class JobWorker(
     private fun process(id: String, options: JobOptions) {
         val job = jobsRepository.getById(id) ?: return
         if (!jobsRepository.markRunningIfQueued(id)) return
-        redis.setex(redisJobKey(id), config.jobTtlSeconds, "running")
+        statusLoop.markRunning(id)
         try {
             val startedAt = System.nanoTime()
-            val token = if (shouldUseTokenFor(options)) tokenServiceClient.fetchForUrl(job.url) else null
-            val result = ytDlpService.download(job.url, token, options) {
-                jobsRepository.getById(id)?.status != JobStatus.RUNNING
+            val token = if (shouldUseTokenFor(options)) resolveToken(job.url) else null
+            val tokenMs = PhaseTiming.elapsedMs(startedAt)
+            progressStore.update(id, WorkerProgressComposer.running(DownloadPhaseMetrics(tokenFetchMs = tokenMs)))
+            val ytdlpStartedAt = System.nanoTime()
+            val result = ytDlpService.download(
+                url = job.url,
+                token = token,
+                options = options,
+                onProgress = { progressStore.update(id, it) },
+            ) {
+                statusLoop.shouldCancel(id)
             }
-            val durationMs = (System.nanoTime() - startedAt) / 1_000_000
+            val ytdlpMs = PhaseTiming.elapsedMs(ytdlpStartedAt)
+            val withPhases = result.withMetrics(tokenFetchMs = tokenMs, ytdlpMs = ytdlpMs)
             val status = if (result.error == null) JobStatus.DONE else JobStatus.FAILED
-            val artifact = if (status == JobStatus.DONE && result.filePath != null) {
-                uploadArtifact(job.cacheKey, result.filePath)
-            } else {
-                null
+            if (status == JobStatus.DONE) {
+                progressStore.update(id, WorkerProgressComposer.finalizing(withPhases))
+                val filePath = withPhases.filePath
+                if (filePath != null) {
+                    uploadExecutor.submitDone(
+                        id = id,
+                        cacheKey = job.cacheKey,
+                        filePath = filePath,
+                        startedAtNs = startedAt,
+                        result = withPhases,
+                        metrics = DownloadPhaseMetrics(tokenFetchMs = tokenMs, ytdlpMs = ytdlpMs),
+                    )
+                    return
+                }
             }
+            val durationMs = PhaseTiming.elapsedMs(startedAt)
             val updated = jobsRepository.markFinishedIfRunning(
                 id = id,
                 status = status,
                 durationMs = durationMs,
-                title = result.title,
-                error = result.error,
-                artifactKey = artifact?.objectKey,
-                artifactExpiresAt = artifact?.expiresAt,
+                title = withPhases.title,
+                error = withPhases.error,
+                artifactKey = null,
+                artifactExpiresAt = null,
             )
-            if (!updated && artifact != null) {
-                storageService.deleteObject(artifact.objectKey)
-            }
             if (updated) {
-                redis.setex(redisJobKey(id), config.jobTtlSeconds, "${status.name.lowercase()}:$durationMs")
+                statusLoop.markFinished(id, "${status.name.lowercase()}:$durationMs")
+                progressStore.update(id, WorkerProgressComposer.completed(status, withPhases, null))
             }
-            result.filePath?.parent?.let { deleteDirectory(it) }
+            withPhases.filePath?.parent?.let(FileTreeCleaner::deleteDirectory)
         } catch (error: Throwable) {
             jobsRepository.markFinishedIfRunning(
                 id = id,
@@ -75,13 +89,23 @@ class JobWorker(
                 artifactKey = null,
                 artifactExpiresAt = null,
             )
-            redis.setex(redisJobKey(id), config.jobTtlSeconds, "failed:0")
+            statusLoop.markFailed(id)
         }
     }
 
     private fun decodeStoredOptions(id: String): JobOptions {
         val row = jobsRepository.getById(id) ?: return JobOptions()
-        return runCatching { JobOptionsCodec.decode(row.optionsJson) }.map(JobOptionsNormalizer::normalize).getOrElse { JobOptions() }
+        return runCatching { JobOptionsCodec.decode(row.optionsJson) }
+            .map { JobOptionsNormalizer.normalize(it, audioPassthroughDefault = config.audioPassthroughDefault) }
+            .getOrElse { JobOptions() }
+    }
+
+    private fun resolveToken(url: String): TokenPayload? {
+        val videoId = tokenServiceClient.resolveVideoId(url) ?: return null
+        tokenCacheStore.get(videoId)?.let { return it }
+        val fetched = tokenServiceClient.fetchForVideoId(videoId) ?: return null
+        tokenCacheStore.put(videoId, fetched)
+        return fetched
     }
 
     private fun shouldUseTokenFor(options: JobOptions): Boolean {
@@ -90,28 +114,7 @@ class JobWorker(
             options.audioCodec.isNotBlank() || options.bitrate != null
         return !hasExactSelection
     }
-
-    private fun uploadArtifact(cacheKey: String, filePath: java.nio.file.Path): StorageArtifact {
-        val expiresAt = Instant.now().plusSeconds(config.s3ArtifactTtlSeconds)
-        val extension = filePath.fileName.toString().substringAfterLast('.', "bin")
-        val objectKey = "cache/$cacheKey.$extension"
-        storageService.putFile(objectKey, filePath, contentType(extension))
-        return StorageArtifact(objectKey = objectKey, expiresAt = expiresAt)
+    fun stop() {
+        uploadExecutor.stop()
     }
-
-    private fun contentType(extension: String): String = when (extension.lowercase()) {
-        "mp4" -> "video/mp4"
-        "webm" -> "video/webm"
-        "mkv" -> "video/x-matroska"
-        "m4a" -> "audio/mp4"
-        "mp3" -> "audio/mpeg"
-        else -> "application/octet-stream"
-    }
-
-    private fun deleteDirectory(dir: java.nio.file.Path) {
-        if (!Files.exists(dir)) return
-        Files.walk(dir).sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
-    }
-
-    private fun redisJobKey(id: String): String = "downloader:job:$id"
 }

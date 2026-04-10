@@ -23,9 +23,12 @@ object JobOptionsNormalizer {
 
     private val allowedSponsorBlockCategories = defaultSponsorBlockCategories.toSet()
 
-    fun normalize(options: JobOptions): JobOptions {
+    fun normalize(options: JobOptions, audioPassthroughDefault: Boolean = false): JobOptions {
         val format = normalizeFormat(options)
         val quality = normalizeQuality(options)
+        val audioPassthrough = options.mode == DownloadMode.AUDIO &&
+            (options.audioPassthrough || (audioPassthroughDefault && options.format.isBlank()))
+        val normalizedFormat = if (audioPassthrough && options.mode == DownloadMode.AUDIO) "" else format
         val videoItag = normalizeItag(options.videoItag)
         val audioItag = normalizeItag(options.audioItag)
         val height = normalizePositive(options.height, max = 4320)
@@ -39,6 +42,7 @@ object JobOptionsNormalizer {
             return options.copy(
                 quality = "best",
                 format = "",
+                audioPassthrough = false,
                 videoItag = "",
                 audioItag = "",
                 height = null,
@@ -52,7 +56,8 @@ object JobOptionsNormalizer {
         }
         return options.copy(
             quality = quality,
-            format = format,
+            format = normalizedFormat,
+            audioPassthrough = audioPassthrough,
             videoItag = videoItag,
             audioItag = audioItag,
             height = height,

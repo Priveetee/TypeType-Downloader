@@ -9,6 +9,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import redis.clients.jedis.Response
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,7 +20,8 @@ class JobServiceRecoveryTest {
     private val jobsRepository = mockk<JobsRepository>(relaxed = true)
     private val redis = mockk<redis.clients.jedis.JedisPooled>(relaxed = true)
     private val storage = mockk<GarageStorageService>(relaxed = true)
-    private val service = JobService(jobsRepository, redis, storage, config())
+    private val progressStore = JobProgressStore(redis, config())
+    private val service = JobService(jobsRepository, redis, storage, config(), progressStore)
 
     @Test
     fun `enqueue stores normalized options json`() {
@@ -38,6 +40,7 @@ class JobServiceRecoveryTest {
 
     @Test
     fun `recovery requeues pending jobs with stored options`() {
+        val pipeline = mockk<redis.clients.jedis.Pipeline>(relaxed = true)
         val one = row("a", JobStatus.QUEUED, JobOptionsCodec.encode(JobOptions(quality = "1080p")))
         val two = row(
             "b",
@@ -46,11 +49,14 @@ class JobServiceRecoveryTest {
         )
         val payloads = mutableListOf<String>()
         every { jobsRepository.listQueuedOrRunning() } returns listOf(one, two)
-        every { redis.rpush("downloader:queue", capture(payloads)) } returns 1L
+        every { redis.pipelined() } returns pipeline
+        every { pipeline.rpush("downloader:queue", capture(payloads)) } returns mockk<Response<Long>>(relaxed = true)
+        every { pipeline.setex(any<String>(), any<Long>(), any<String>()) } returns mockk<Response<String>>(relaxed = true)
         service.recoverPendingJobs()
         verify { jobsRepository.resetRunningToQueued() }
         verify { redis.del("downloader:queue") }
-        verify(exactly = 2) { redis.setex(any(), 600L, "queued") }
+        verify(exactly = 1) { redis.pipelined() }
+        verify(exactly = 1) { pipeline.sync() }
         val queued = payloads.mapNotNull { JobOptionsCodec.decodeQueue(it) }
         assertEquals(setOf("a", "b"), queued.map { it.id }.toSet())
         val recoveredAudio = queued.first { it.id == "b" }.options
@@ -69,6 +75,9 @@ class JobServiceRecoveryTest {
         error = null,
         artifactKey = null,
         artifactExpiresAt = Instant.now().plusSeconds(300),
+        createdAt = Instant.now().minusSeconds(120),
+        startedAt = null,
+        finishedAt = null,
     )
 
     private fun config(): AppConfig = AppConfig(
@@ -76,14 +85,26 @@ class JobServiceRecoveryTest {
         dbUrl = "jdbc:postgresql://localhost:55432/typetype_downloader",
         dbUser = "typetype",
         dbPassword = "typetype",
+        dbPoolSize = 8,
+        dbMinIdle = 1,
         redisHost = "localhost",
         redisPort = 56379,
         redisQueueKey = "downloader:queue",
         maxConcurrentWorkers = 2,
+        uploadConcurrency = 2,
         maxQueueSize = 100,
         jobTtlSeconds = 600,
         ytdlpBin = "yt-dlp",
         ytdlpTimeoutSeconds = 60,
+        ytdlpConcurrentFragments = 1,
+        ytdlpRetries = 10,
+        ytdlpFragmentRetries = 10,
+        ytdlpSocketTimeoutSeconds = 30,
+        ytdlpHttpChunkSize = "",
+        ytdlpExternalDownloader = "",
+        ytdlpExternalDownloaderArgs = "",
+        audioPassthroughDefault = false,
+        tokenCacheTtlSeconds = 600,
         enableTranscode = false,
         s3Endpoint = "http://localhost:3900",
         s3Region = "garage",

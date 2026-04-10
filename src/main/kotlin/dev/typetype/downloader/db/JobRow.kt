@@ -14,4 +14,7 @@ data class JobRow(
     val error: String?,
     val artifactKey: String?,
     val artifactExpiresAt: Instant?,
+    val createdAt: Instant?,
+    val startedAt: Instant?,
+    val finishedAt: Instant?,
 )

@@ -6,9 +6,11 @@ import dev.typetype.downloader.db.JobsRepository
 import dev.typetype.downloader.routes.healthRoutes
 import dev.typetype.downloader.routes.jobRoutes
 import dev.typetype.downloader.services.JobService
+import dev.typetype.downloader.services.JobProgressStore
 import dev.typetype.downloader.services.JobWorker
 import dev.typetype.downloader.services.QueueSaturatedException
 import dev.typetype.downloader.services.GarageStorageService
+import dev.typetype.downloader.services.TokenCacheStore
 import dev.typetype.downloader.services.TokenServiceClient
 import dev.typetype.downloader.services.YtDlpService
 import io.ktor.http.HttpStatusCode
@@ -30,10 +32,12 @@ fun Application.module() {
     val storage = GarageStorageService(config)
     storage.ensureBucket()
     val jobsRepository = JobsRepository()
+    val progressStore = JobProgressStore(redis, config)
     val ytDlpService = YtDlpService(config)
     val tokenServiceClient = TokenServiceClient(config)
-    val jobService = JobService(jobsRepository, redis, storage, config)
-    val worker = JobWorker(jobsRepository, redis, ytDlpService, tokenServiceClient, storage, config)
+    val tokenCacheStore = TokenCacheStore(redis, config)
+    val jobService = JobService(jobsRepository, redis, storage, config, progressStore)
+    val worker = JobWorker(jobsRepository, redis, ytDlpService, tokenServiceClient, tokenCacheStore, storage, config, progressStore)
     jobService.recoverPendingJobs()
     worker.start()
 
@@ -54,6 +58,7 @@ fun Application.module() {
     }
 
     monitor.subscribe(ApplicationStopping) {
+        worker.stop()
         storage.close()
         redis.close()
         Database.close()

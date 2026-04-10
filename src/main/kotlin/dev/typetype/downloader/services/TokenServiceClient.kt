@@ -16,7 +16,13 @@ class TokenServiceClient(private val config: AppConfig) {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun fetchForUrl(url: String): TokenPayload? {
-        val videoId = extractYoutubeVideoId(SourceUrlResolver.resolve(url)) ?: return null
+        val videoId = resolveVideoId(url) ?: return null
+        return fetchForVideoId(videoId)
+    }
+
+    fun resolveVideoId(url: String): String? = extractYoutubeVideoId(SourceUrlResolver.resolve(url))
+
+    fun fetchForVideoId(videoId: String): TokenPayload? {
         val encoded = URLEncoder.encode(videoId, StandardCharsets.UTF_8)
         val uri = URI("${config.tokenServiceUrl}/potoken?videoId=$encoded")
         val request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(10)).GET().build()

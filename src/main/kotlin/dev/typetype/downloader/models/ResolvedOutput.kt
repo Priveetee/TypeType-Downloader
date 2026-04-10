@@ -13,4 +13,8 @@ data class ResolvedOutput(
     val container: String? = null,
     val bitrate: Int? = null,
     val fileName: String? = null,
+    val effectiveVideoCodec: String? = null,
+    val effectiveAudioCodec: String? = null,
+    val effectiveFps: Double? = null,
+    val effectiveFormatId: String? = null,
 )

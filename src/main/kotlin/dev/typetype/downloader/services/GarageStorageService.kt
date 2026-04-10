@@ -35,7 +35,6 @@ class GarageStorageService(config: AppConfig) {
             S3Configuration.builder()
                 .pathStyleAccessEnabled(true)
                 .chunkedEncodingEnabled(false)
-                .checksumValidationEnabled(false)
                 .build(),
         )
         .build()
@@ -48,7 +47,6 @@ class GarageStorageService(config: AppConfig) {
             S3Configuration.builder()
                 .pathStyleAccessEnabled(true)
                 .chunkedEncodingEnabled(false)
-                .checksumValidationEnabled(false)
                 .build(),
         )
         .build()

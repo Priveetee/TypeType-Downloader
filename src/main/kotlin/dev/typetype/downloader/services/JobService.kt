@@ -19,18 +19,25 @@ class JobService(
     private val redis: JedisPooled,
     private val storageService: GarageStorageService,
     private val config: AppConfig,
+    private val progressStore: JobProgressStore,
 ) {
+    private val queuePublisher = JobQueuePublisher(redis, config, progressStore)
+    private val responseCacheStore = JobResponseCacheStore(redis)
+
     fun enqueue(url: String, requestedOptions: JobOptions): CreateJobResponse {
         val resolvedUrl = SourceUrlResolver.resolve(url)
         validateUrl(resolvedUrl)
-        val options = JobOptionsNormalizer.normalize(requestedOptions)
+        val options = JobOptionsNormalizer.normalize(
+            requestedOptions,
+            audioPassthroughDefault = config.audioPassthroughDefault,
+        )
         val optionsJson = JobOptionsCodec.encode(options)
         val cacheKey = JobCacheKey.from(resolvedUrl, optionsJson)
         val id = UUID.randomUUID().toString()
         val reusable = jobsRepository.findReusableByCacheKey(cacheKey)
         if (reusable != null) {
             jobsRepository.insertDoneFromCache(id = id, url = resolvedUrl, optionsJson = optionsJson, cached = reusable)
-            redis.setex(redisJobKey(id), config.jobTtlSeconds, "done:cached")
+            queuePublisher.markCached(id, reusable.artifactKey)
             return CreateJobResponse(id = id, cached = true)
         }
         val queueSize = redis.llen(config.redisQueueKey)
@@ -38,15 +45,17 @@ class JobService(
             throw QueueSaturatedException("Queue is full")
         }
         jobsRepository.insertQueued(id = id, url = resolvedUrl, cacheKey = cacheKey, optionsJson = optionsJson)
-        val payload = JobOptionsCodec.encodeQueue(JobOptionsCodec.QueuePayload(id = id, options = options))
-        redis.rpush(config.redisQueueKey, payload)
-        redis.setex(redisJobKey(id), config.jobTtlSeconds, "queued")
+        queuePublisher.enqueue(id, options)
         return CreateJobResponse(id = id, cached = false)
     }
 
     fun get(id: String): JobResponse? {
+        responseCacheStore.get(id)?.let { return it }
         val row = jobsRepository.getById(id) ?: return null
-        return JobViewBuilder.build(row, storageService)
+        val progress = progressStore.get(id)
+        val response = JobViewBuilder.build(row, storageService, progress)
+        responseCacheStore.put(id, response, responseCacheStore.ttlFor(row.status))
+        return response
     }
 
     fun cancel(id: String): CancelJobResult {
@@ -55,7 +64,9 @@ class JobService(
             return CancelJobResult.NOT_CANCELLABLE
         }
         return if (jobsRepository.markCancelled(id)) {
-            redis.setex(redisJobKey(id), config.jobTtlSeconds, "failed:0")
+            redis.setex(JobRedisKeys.job(id), config.jobTtlSeconds, "failed:0")
+            progressStore.setCancelled(id)
+            progressStore.update(id, JobProgressState(stage = "cancelled"))
             CancelJobResult.CANCELLED
         } else {
             CancelJobResult.NOT_CANCELLABLE
@@ -67,19 +78,17 @@ class JobService(
         if (existing.status == JobStatus.RUNNING) return DeleteJobResult.CONFLICT_RUNNING
         val deleted = jobsRepository.deleteIfNotRunning(id) ?: return DeleteJobResult.NOT_FOUND
         deleted.artifactKey?.let { storageService.deleteObject(it) }
-        redis.del(redisJobKey(id))
+        redis.del(JobRedisKeys.job(id))
+        progressStore.clear(id)
+        progressStore.clearCancelled(id)
+        responseCacheStore.clear(id)
         return DeleteJobResult.DELETED
     }
 
     fun recoverPendingJobs() {
         jobsRepository.resetRunningToQueued()
-        redis.del(config.redisQueueKey)
-        jobsRepository.listQueuedOrRunning().forEach { row ->
-            val options = runCatching { JobOptionsCodec.decode(row.optionsJson) }.map(JobOptionsNormalizer::normalize).getOrElse { JobOptions() }
-            val payload = JobOptionsCodec.encodeQueue(JobOptionsCodec.QueuePayload(id = row.id, options = options))
-            redis.rpush(config.redisQueueKey, payload)
-            redis.setex(redisJobKey(row.id), config.jobTtlSeconds, "queued")
-        }
+        queuePublisher.resetQueue()
+        queuePublisher.recoverPending(jobsRepository.listQueuedOrRunning())
     }
 
     private fun validateUrl(url: String) {
@@ -93,5 +102,4 @@ class JobService(
         }
     }
 
-    private fun redisJobKey(id: String): String = "downloader:job:$id"
 }
