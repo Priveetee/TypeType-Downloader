@@ -14,4 +14,7 @@ fun rowFrom(rs: ResultSet): JobRow = JobRow(
     error = rs.getString("error"),
     artifactKey = rs.getString("artifact_key"),
     artifactExpiresAt = rs.getTimestamp("artifact_expires_at")?.toInstant(),
+    createdAt = rs.getTimestamp("created_at")?.toInstant(),
+    startedAt = rs.getTimestamp("started_at")?.toInstant(),
+    finishedAt = rs.getTimestamp("finished_at")?.toInstant(),
 )

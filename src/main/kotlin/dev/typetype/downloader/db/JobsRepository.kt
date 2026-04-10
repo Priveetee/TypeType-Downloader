@@ -6,7 +6,7 @@ import java.sql.Types
 import java.time.Instant
 
 class JobsRepository {
-    private val columns = "id, source_url, cache_key, options_json, status, duration_ms, title, error, artifact_key, artifact_expires_at"
+    private val columns = "id, source_url, cache_key, options_json, status, duration_ms, title, error, artifact_key, artifact_expires_at, created_at, started_at, finished_at"
 
     fun insertQueued(id: String, url: String, cacheKey: String, optionsJson: String) {
         val sql = "INSERT INTO jobs (id, source_url, cache_key, options_json, status, duration_ms, title, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"

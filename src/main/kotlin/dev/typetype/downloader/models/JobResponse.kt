@@ -18,5 +18,11 @@ data class JobResponse(
     val downloadedBytes: Long? = null,
     val totalBytes: Long? = null,
     val etaSeconds: Long? = null,
+    val speedBytesPerSecond: Long? = null,
     val stage: String? = null,
+    val queuedAt: String? = null,
+    val startedAt: String? = null,
+    val finishedAt: String? = null,
+    val queueWaitMs: Long? = null,
+    val runTimeMs: Long? = null,
 )

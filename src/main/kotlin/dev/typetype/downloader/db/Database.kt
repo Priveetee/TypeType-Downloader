@@ -14,8 +14,8 @@ object Database {
             jdbcUrl = config.dbUrl
             username = config.dbUser
             password = config.dbPassword
-            maximumPoolSize = 8
-            minimumIdle = 1
+            maximumPoolSize = config.dbPoolSize
+            minimumIdle = config.dbMinIdle
         }
         dataSource = HikariDataSource(hikari)
         withConnection { connection ->
@@ -50,6 +50,10 @@ object Database {
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_jobs_cache_key ON jobs(cache_key)")
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_jobs_artifact_expiry ON jobs(artifact_expires_at)")
+                statement.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_jobs_cache_lookup ON jobs(cache_key, status, artifact_expires_at, finished_at DESC)",
+                )
+                statement.execute("CREATE INDEX IF NOT EXISTS idx_jobs_pending_scan ON jobs(status, created_at)")
             }
         }
     }
