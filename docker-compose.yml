@@ -2,19 +2,19 @@ services:
   postgres:
     image: postgres:17
     environment:
-      POSTGRES_USER: typetype
-      POSTGRES_PASSWORD: typetype
-      POSTGRES_DB: typetype_downloader
+      POSTGRES_USER: ${DB_USER:-typetype}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-typetype_downloader}
     ports:
       - "55432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U typetype -d typetype_downloader"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 30
 
   dragonfly:
-    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.38.0
     ports:
       - "56379:6379"
 
@@ -31,39 +31,38 @@ services:
       - ./data/garage/data:/var/lib/garage/data
 
   typetype-downloader:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.wolfi
     environment:
       HTTP_PORT: "18093"
-      DB_URL: jdbc:postgresql://postgres:5432/typetype_downloader
-      DB_USER: typetype
-      DB_PASSWORD: typetype
-      REDIS_HOST: dragonfly
-      REDIS_PORT: "6379"
-      REDIS_QUEUE_KEY: downloader:queue
-      MAX_CONCURRENT_WORKERS: "2"
-      MAX_QUEUE_SIZE: "100"
-      JOB_TTL_SECONDS: "600"
-      YTDLP_BIN: yt-dlp
-      YTDLP_TIMEOUT_SECONDS: "120"
-      YTDLP_CONCURRENT_FRAGMENTS: "1"
-      YTDLP_RETRIES: "10"
-      YTDLP_FRAGMENT_RETRIES: "10"
-      YTDLP_SOCKET_TIMEOUT_SECONDS: "30"
-      YTDLP_HTTP_CHUNK_SIZE: ""
-      YTDLP_EXTERNAL_DOWNLOADER: ""
-      YTDLP_EXTERNAL_DOWNLOADER_ARGS: ""
-      AUDIO_PASSTHROUGH_DEFAULT: "false"
-      TOKEN_CACHE_TTL_SECONDS: "600"
-      ENABLE_TRANSCODE: "false"
-      S3_ENDPOINT: http://garage:3900
-      S3_REGION: garage
-      S3_BUCKET: typetype-downloads
-      S3_ACCESS_KEY: demo-access-key
-      S3_SECRET_KEY: demo-secret-key
-      S3_ARTIFACT_TTL_SECONDS: "7200"
-      TOKEN_SERVICE_URL: http://typetype-token:8081
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:18093}
+      TYPETYPE_API_BASE: ${TYPETYPE_API_BASE:-http://host.docker.internal:18080}
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-typetype_downloader}
+      DB_USER: ${DB_USER:-typetype}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      REDIS_HOST: ${REDIS_HOST:-dragonfly}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_QUEUE_KEY: ${REDIS_QUEUE_KEY:-downloader:queue}
+      MAX_CONCURRENT_WORKERS: ${MAX_CONCURRENT_WORKERS:-2}
+      MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE:-100}
+      JOB_TTL_SECONDS: ${JOB_TTL_SECONDS:-600}
+      DOWNLOAD_WORKERS: ${DOWNLOAD_WORKERS:-8}
+      DOWNLOAD_CHUNK_SIZE: ${DOWNLOAD_CHUNK_SIZE:-10485760}
+      DOWNLOAD_RANGE_MODE: ${DOWNLOAD_RANGE_MODE:-query}
+      MUXER: ${MUXER:-avformat}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://garage:3900}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:3900}
+      S3_REGION: ${S3_REGION:-garage}
+      S3_BUCKET: ${S3_BUCKET:-typetype-downloads}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+      S3_ARTIFACT_TTL_SECONDS: ${S3_ARTIFACT_TTL_SECONDS:-7200}
     ports:
       - "18093:18093"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
