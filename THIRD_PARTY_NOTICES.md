@@ -1,19 +1,18 @@
 # Third Party Notices
 
-TypeType-Downloader relies on external tools and libraries.
+TypeType Downloader Go depends on Go modules listed in `go.mod` and `go.sum`.
 
-## Bundled runtime tools
+The Docker runtime image also links against FFmpeg libraries from Wolfi:
 
-- `yt-dlp` — Unlicense
-  - Source: https://github.com/yt-dlp/yt-dlp
-- `ffmpeg` — LGPL/GPL depending on build options
-  - Source: https://ffmpeg.org/
+| Package | License metadata |
+|---|---|
+| `ffmpeg-8.1-libavformat62` | `GPL-2.0-or-later AND LGPL-2.1-or-later` |
+| `ffmpeg-8.1-libavcodec62` | `GPL-2.0-or-later AND LGPL-2.1-or-later` |
+| `ffmpeg-8.1-libavutil60` | `GPL-2.0-or-later AND LGPL-2.1-or-later` |
 
-## Kotlin/JVM dependencies
+The Wolfi `libavcodec` package depends on GPL-related codec libraries including
+`libx264` and `libx265`. Because of that, the distributed Docker image should be
+treated as GPL-compatible, not Apache-only.
 
-Dependency licenses are provided by their upstream projects and Maven artifacts.
-
-## Notes
-
-- This repository is licensed under GPL v3.
-- Redistribution must preserve applicable third-party notices and license terms.
+If the project later switches to an LGPL-only FFmpeg build, the project license
+can be reconsidered.
