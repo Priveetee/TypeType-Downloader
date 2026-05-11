@@ -162,6 +162,5 @@ Optional end-to-end check:
 TypeType Downloader is licensed under `GPL-3.0-or-later`.
 
 The current Docker runtime links against Wolfi FFmpeg packages whose metadata
-includes GPL components. Third-party details are documented here:
-
-https://github.com/Priveetee/TypeType-Downloader/blob/main/THIRD_PARTY_NOTICES.md
+includes GPL components. See the [third-party notices](https://github.com/Priveetee/TypeType-Downloader/blob/main/THIRD_PARTY_NOTICES.md)
+for details.
