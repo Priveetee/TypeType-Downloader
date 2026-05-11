@@ -1,137 +1,110 @@
-# TypeType Downloader Go
+# TypeType Downloader
 
-Native Go downloader service for TypeType.
+Native Go downloader backend for TypeType.
 
-The service receives download jobs over HTTP, asks TypeType-Server for direct stream metadata, downloads selected audio/video streams with parallel HTTP Range requests, and muxes the result with libavformat.
+This service replaces the old Kotlin downloader. It receives download jobs,
+downloads direct media streams exposed by TypeType-Server, muxes audio/video
+with libavformat, and serves the final artifact through local storage or S3.
 
-License: GPL-3.0-or-later. The current Docker runtime links against Wolfi FFmpeg packages whose metadata includes GPL components; see `THIRD_PARTY_NOTICES.md`.
+## Why This Exists
 
-## Run
+| Before | Now |
+|---|---|
+| Kotlin service around external tooling | Native Go backend |
+| Downloader also carried extraction-era assumptions | Strict download-only boundary |
+| Heavy runtime | Small Wolfi image |
+| Less control over progress and artifacts | Native job lifecycle, SSE, S3 redirects |
 
-```sh
-go run ./cmd/server
-```
+TypeType-Server extracts stream metadata. This service downloads and muxes.
+That boundary is intentional.
 
-Defaults:
+## Features
 
-- `HTTP_ADDR=:18093`
-- `HTTP_PORT=18093` is also accepted for compatibility with the current TypeType stack
-- `PUBLIC_BASE_URL=http://localhost:18093`
-- `TYPETYPE_API_BASE=http://typetype-server:8080`
-- `DATA_DIR=data`
-- `DATABASE_URL=` disables Postgres persistence when empty
-- `DB_URL`, `DB_USER`, and `DB_PASSWORD` are also accepted for compatibility with the current TypeType stack
-- `REDIS_HOST=`, `REDIS_PORT=6379`, and `JOB_TTL_SECONDS=600` enable Dragonfly status/cache publishing
-- `STORAGE_BACKEND=local`, set `s3` for Garage/S3 artifact storage
-- `S3_ENDPOINT=` S3-compatible endpoint, with or without scheme
-- `S3_PUBLIC_ENDPOINT=` optional endpoint used only for presigned artifact URLs
-- `S3_REGION=garage`
-- `S3_BUCKET=` artifact bucket
-- `S3_ACCESS_KEY=` access key
-- `S3_SECRET_KEY=` secret key
-- `S3_USE_SSL=true`
-- `S3_PATH_STYLE=true`
-- `S3_ARTIFACT_TTL_SECONDS=7200`, or `ARTIFACT_URL_TTL_SECONDS` as an override
-- `MAX_CONCURRENT_WORKERS=2`
-- `DOWNLOAD_WORKERS=8`
-- `DOWNLOAD_CHUNK_SIZE=10485760`
-- `DOWNLOAD_RANGE_MODE=query`
-- `MUXER=avformat`
-- `DOWNLOAD_HTTP2=true`
-- `MAX_QUEUE_SIZE=100`
+| Feature | Status |
+|---|---|
+| Async download jobs | Yes |
+| Progress API | Yes |
+| SSE job events | Yes |
+| Parallel HTTP Range downloads | Yes |
+| Audio-only downloads | Yes |
+| MP4/WebM stream selection | Yes |
+| libavformat stream-copy muxing | Yes |
+| Local artifact storage | Yes |
+| S3/Garage artifact storage | Yes |
+| Postgres job persistence | Yes |
+| Dragonfly status cache | Yes |
+| yt-dlp runtime dependency | No |
 
-## TypeType Beta Stack
+## Docker
 
-The service accepts the environment contract used by `../TypeType/docker-compose.dev.yml` and `../TypeType/docker-compose.dev.beta-downloader.yml`:
-
-- `HTTP_PORT`
-- `DB_URL=jdbc:postgresql://postgres:5432/typetype_downloader`
-- `DB_USER`, `DB_PASSWORD`
-- `REDIS_HOST=dragonfly`, `REDIS_PORT=6379`, `REDIS_QUEUE_KEY`
-- `MAX_CONCURRENT_WORKERS`, `MAX_QUEUE_SIZE`, `JOB_TTL_SECONDS`
-- `S3_ENDPOINT=http://garage:3900`
-- `S3_PUBLIC_ENDPOINT=http://localhost:3900` for the local Go Beta override
-- `S3_REGION=garage`, `S3_BUCKET=typetype-downloads`
-- `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_ARTIFACT_TTL_SECONDS`
-
-When `TYPETYPE_API_BASE` is not set, the downloader calls `http://typetype-server:8080/streams`, matching the Beta Compose network.
-
-Run the Beta stack with this Go downloader built locally:
+The Docker image is the normal production runtime for this repository.
 
 ```sh
-cd ../TypeType
-docker compose -p typetype-go-beta -f docker-compose.dev.yml -f docker-compose.dev.go-downloader.yml up -d --build typetype-downloader typetype-server typetype
+docker build -f Dockerfile.wolfi -t typetype-downloader-go:wolfi .
 ```
 
-Then run the end-to-end check through the frontend gateway:
+Run with local Compose:
 
 ```sh
-cd ../TypeType-Downloader
-./scripts/e2e-beta.sh
+DB_PASSWORD=change-me \
+S3_ACCESS_KEY=change-me \
+S3_SECRET_KEY=change-me \
+docker compose up -d --build
 ```
 
-Use `BASE_URL=http://localhost:18080/downloader ./scripts/e2e-beta.sh` to bypass the frontend nginx and hit TypeType-Server directly.
+The service listens on port `18093`.
+
+## Configuration
+
+| Variable | Purpose |
+|---|---|
+| `HTTP_PORT` | HTTP port, default `18093` |
+| `PUBLIC_BASE_URL` | Public base URL used in job responses |
+| `TYPETYPE_API_BASE` | TypeType-Server base URL for `/streams` |
+| `DB_URL` or `DATABASE_URL` | Postgres connection |
+| `DB_USER`, `DB_PASSWORD` | Postgres credentials when using `DB_URL` |
+| `REDIS_HOST`, `REDIS_PORT` | Dragonfly/Redis-compatible cache |
+| `STORAGE_BACKEND` | `local` or `s3` |
+| `S3_ENDPOINT` | Internal S3/Garage endpoint used by the service |
+| `S3_PUBLIC_ENDPOINT` | Public endpoint used for presigned artifact URLs |
+| `S3_BUCKET` | Artifact bucket |
+| `S3_ACCESS_KEY`, `S3_SECRET_KEY` | S3 credentials |
+| `MAX_CONCURRENT_WORKERS` | Number of concurrent jobs |
+| `DOWNLOAD_WORKERS` | Range workers per stream |
+| `DOWNLOAD_CHUNK_SIZE` | Range chunk size in bytes |
+| `MUXER` | `avformat` by default |
+
+Use `.env.example` as a starting point for local development.
 
 ## Storage
 
-Local storage keeps completed files under `DATA_DIR/artifacts/<job-id>/` and serves them directly from `GET /jobs/{id}/artifact`.
+| Mode | Behavior |
+|---|---|
+| `local` | Keeps artifacts under `DATA_DIR/artifacts/<job-id>/` |
+| `s3` | Uploads artifacts to S3/Garage and returns presigned redirects |
 
-S3/Garage mode uploads the final muxed file and deletes the local output copy. The artifact endpoint returns a short-lived presigned redirect.
+`S3_ENDPOINT` and `S3_PUBLIC_ENDPOINT` are separate on purpose.
 
-```sh
-S3_ENDPOINT=http://garage:3900 \
-S3_PUBLIC_ENDPOINT=http://localhost:3900 \
-S3_BUCKET=typetype-downloads \
-S3_ACCESS_KEY=dev-access \
-S3_SECRET_KEY=dev-secret \
-go run ./cmd/server
-```
+| Endpoint | Used for |
+|---|---|
+| `S3_ENDPOINT` | Uploads, deletes, health checks from inside the service |
+| `S3_PUBLIC_ENDPOINT` | URLs returned to clients for artifact downloads |
 
-`S3_ENDPOINT` is used for uploads and health checks from the downloader process. `S3_PUBLIC_ENDPOINT` is used for presigned download redirects. In local Beta, this keeps multi-GB artifacts out of the Kotlin gateway proxy and lets clients download directly from Garage.
-
-## Benchmarks
-
-Run the reproducible Beta benchmark script from this repository:
-
-```sh
-./scripts/bench-beta.sh
-```
-
-By default it runs the small video/audio Go jobs. Large 10 hour checks are opt-in:
-
-```sh
-RUN_LARGE=1 OUT_DIR=/home/ark/Project/TypeType-Downloader/bench-out ./scripts/bench-beta.sh
-```
-
-Recent isolated Beta Go results on Wolfi:
-
-- small 1080p video `dQw4w9WgXcQ`: `782 ms`
-- small audio `dQw4w9WgXcQ`: `262 ms`
-- 10h audio `AKeUssuu3Is`: `6033 ms`
-- 10h 1080p video `AKeUssuu3Is`: `141652 ms`
-
-## Database
-
-Set `DATABASE_URL` or the stack-compatible `DB_URL`/`DB_USER`/`DB_PASSWORD` to persist job metadata to Postgres. The service creates the `downloader_jobs` table automatically and restores completed jobs into the cache on startup.
-
-```sh
-DATABASE_URL='postgres://user:pass@localhost:5432/typetype_downloader?sslmode=disable' \
-go run ./cmd/server
-```
-
-The SQL schema is also available in `migrations/001_jobs.sql`.
-
-## Dragonfly
-
-Set `REDIS_HOST` and `REDIS_PORT` to publish job status snapshots into Dragonfly with `JOB_TTL_SECONDS`. This keeps the downloader aligned with the existing TypeType stack while the authoritative job state remains in-memory plus optional Postgres persistence.
-
-## Cache And Performance
-
-Job requests are deduplicated by normalized URL plus options. If an identical completed job exists, `POST /jobs` returns the existing `id` with `cached: true`; if the job is already queued or running, the existing `id` is returned without enqueueing duplicate work.
-
-The worker pool is bounded by `MAX_CONCURRENT_WORKERS`. Each active job downloads audio and video concurrently, and each stream uses `DOWNLOAD_WORKERS` parallel Range workers with a shared HTTP client per runner.
+This avoids pushing multi-GB artifacts through an HTTP gateway when Garage can
+serve them directly.
 
 ## API
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/jobs` | Create a download job |
+| `GET` | `/jobs/{id}` | Read job status |
+| `GET` | `/jobs/{id}/events` | Stream job updates as SSE |
+| `GET` | `/jobs/{id}/artifact` | Download or redirect to artifact |
+| `POST` | `/jobs/{id}/cancel` | Cancel queued/running job |
+| `DELETE` | `/jobs/{id}` | Delete non-running job and artifact |
+| `GET` | `/health` | Basic health check |
+| `GET` | `/health/deep` | Service, Postgres, Dragonfly and S3 health |
 
 Create a job:
 
@@ -141,40 +114,54 @@ curl -sS -X POST http://localhost:18093/jobs \
   -d '{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","options":{"container":"mp4","height":1080}}'
 ```
 
-Check status:
-
-```sh
-curl -sS http://localhost:18093/jobs/<id>
-```
-
-Stream events:
-
-```sh
-curl -N http://localhost:18093/jobs/<id>/events
-```
-
-Download artifact when the job is done:
+Download the finished artifact:
 
 ```sh
 curl -L -o output.mp4 http://localhost:18093/jobs/<id>/artifact
 ```
 
-Cancel a queued or running job:
+## Benchmarks
+
+Recent Go results from the isolated Beta stack on Wolfi:
+
+| Media | Job time |
+|---|---:|
+| Small 1080p video `dQw4w9WgXcQ` | `782 ms` |
+| Small audio `dQw4w9WgXcQ` | `262 ms` |
+| 10h audio `AKeUssuu3Is` | `6033 ms` |
+| 10h 1080p video `AKeUssuu3Is` | `141652 ms` |
+
+Run the Go benchmark script:
 
 ```sh
-curl -sS -X POST http://localhost:18093/jobs/<id>/cancel
+./scripts/bench-beta.sh
 ```
 
-Delete a non-running job:
+Large checks are opt-in:
 
 ```sh
-curl -sS -X DELETE http://localhost:18093/jobs/<id>
+RUN_LARGE=1 ./scripts/bench-beta.sh
 ```
 
-## Development Checks
+## Development
 
 ```sh
 gofmt -w cmd internal
 go test ./...
 go build ./...
 ```
+
+Optional end-to-end check:
+
+```sh
+./scripts/e2e-beta.sh
+```
+
+## License
+
+TypeType Downloader is licensed under `GPL-3.0-or-later`.
+
+The current Docker runtime links against Wolfi FFmpeg packages whose metadata
+includes GPL components. Third-party details are documented here:
+
+https://github.com/Priveetee/TypeType-Downloader/blob/main/THIRD_PARTY_NOTICES.md
