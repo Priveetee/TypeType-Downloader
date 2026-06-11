@@ -116,12 +116,20 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	if err := os.MkdirAll(filepath.Dir(paths.Output), 0o755); err != nil {
 		return err
 	}
+	if usesRemoteMux(selection) {
+		return r.runRemoteMux(ctx, id, selection, paths, started)
+	}
 	downloadMs, err := r.download(ctx, id, selection, paths)
 	if err != nil {
 		return err
 	}
 	muxStarted := time.Now()
 	totalBytes := selection.Video.ContentLength + selection.Audio.ContentLength
+	if totalBytes <= 0 {
+		if current, ok := r.store.Get(id); ok {
+			totalBytes = current.Progress.TotalBytes
+		}
+	}
 	r.store.Progress(id, job.Progress{Stage: "mux", DownloadedBytes: totalBytes, TotalBytes: totalBytes})
 	if err := retry(ctx, 2, "mux", func() error {
 		_ = os.Remove(paths.Output)
