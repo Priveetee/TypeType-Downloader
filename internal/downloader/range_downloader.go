@@ -38,7 +38,7 @@ type Progress struct {
 type ProgressFunc func(Progress)
 
 func DownloadFile(ctx context.Context, client *http.Client, source Source, output string, options Options, progress ProgressFunc) error {
-	if source.URL == "" || source.Size <= 0 {
+	if source.URL == "" {
 		return fmt.Errorf("invalid source %s", source.Name)
 	}
 	if client == nil {
@@ -61,6 +61,13 @@ func DownloadFile(ctx context.Context, client *http.Client, source Source, outpu
 	}
 	if options.RangeMode == "" {
 		options.RangeMode = "header"
+	}
+	if source.Size <= 0 {
+		size, err := probeSourceSize(ctx, client, source.URL, options.RangeMode)
+		if err != nil {
+			return fmt.Errorf("probe %s size: %w", source.Name, err)
+		}
+		source.Size = size
 	}
 
 	tmp := output + ".part"
@@ -157,7 +164,12 @@ func downloadChunk(ctx context.Context, client *http.Client, file *os.File, sour
 }
 
 func fetchChunk(ctx context.Context, client *http.Client, file *os.File, source Source, part chunk, options Options, downloaded *atomic.Int64, started time.Time, progress ProgressFunc) error {
-	requestURL, err := rangedURL(source.URL, part, options.RangeMode)
+	rangeMode := effectiveRangeMode(source.URL, options.RangeMode)
+	requestURL, err := rangedURL(source.URL, part, rangeMode)
+	if err != nil {
+		return err
+	}
+	requestURL, err = stripFragment(requestURL)
 	if err != nil {
 		return err
 	}
@@ -166,26 +178,26 @@ func fetchChunk(ctx context.Context, client *http.Client, file *os.File, source 
 		return err
 	}
 	req.Header.Set("Accept-Encoding", "identity")
-	if options.RangeMode == "header" {
+	if rangeMode == "header" {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", part.start, part.end))
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/122 Safari/537.36")
+	applyMediaHeaders(req, source.URL)
 
 	res, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusPartialContent && !(options.RangeMode == "query" && res.StatusCode == http.StatusOK) {
+	if res.StatusCode != http.StatusPartialContent && !(rangeMode == "query" && res.StatusCode == http.StatusOK) {
 		return fmt.Errorf("unexpected HTTP status %d", res.StatusCode)
 	}
-	if contentRange := res.Header.Get("Content-Range"); options.RangeMode == "header" && !strings.HasPrefix(contentRange, fmt.Sprintf("bytes %d-%d/", part.start, part.end)) {
+	if contentRange := res.Header.Get("Content-Range"); rangeMode == "header" && !strings.HasPrefix(contentRange, fmt.Sprintf("bytes %d-%d/", part.start, part.end)) {
 		return fmt.Errorf("unexpected Content-Range %q", contentRange)
 	}
 
 	buf := make([]byte, options.BufferSize)
 	position := part.start
-	lastProgress := downloaded.Load()
+	written := int64(0)
 	for {
 		n, readErr := res.Body.Read(buf)
 		if n > 0 {
@@ -196,14 +208,7 @@ func fetchChunk(ctx context.Context, client *http.Client, file *os.File, source 
 				return err
 			}
 			position += int64(n)
-			current := downloaded.Add(int64(n))
-			if progress != nil && (current-lastProgress >= options.ProgressBytes || current == source.Size) {
-				lastProgress = current
-				elapsed := time.Since(started).Seconds()
-				if elapsed > 0 {
-					progress(Progress{Name: source.Name, Downloaded: current, Total: source.Size, Speed: float64(current) / elapsed})
-				}
-			}
+			written += int64(n)
 		}
 		if readErr == io.EOF {
 			break
@@ -215,7 +220,23 @@ func fetchChunk(ctx context.Context, client *http.Client, file *os.File, source 
 	if position != part.end+1 {
 		return fmt.Errorf("short chunk: got %d expected %d", position-part.start, part.end-part.start+1)
 	}
+	current := downloaded.Add(written)
+	if progress != nil {
+		elapsed := time.Since(started).Seconds()
+		if elapsed > 0 {
+			progress(Progress{Name: source.Name, Downloaded: current, Total: source.Size, Speed: float64(current) / elapsed})
+		}
+	}
 	return nil
+}
+
+func stripFragment(rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	parsed.Fragment = ""
+	return parsed.String(), nil
 }
 
 func rangedURL(rawURL string, part chunk, mode string) (string, error) {
