@@ -48,7 +48,41 @@ func (c *Client) FetchStream(ctx context.Context, rawURL string) (*StreamRespons
 	if err := json.NewDecoder(res.Body).Decode(&stream); err != nil {
 		return nil, err
 	}
+	c.normalizeStreamURLs(&stream)
 	return &stream, nil
+}
+
+func (c *Client) normalizeStreamURLs(stream *StreamResponse) {
+	for i := range stream.VideoStreams {
+		stream.VideoStreams[i].URL = c.mediaURL(stream.VideoStreams[i].URL)
+	}
+	for i := range stream.VideoOnlyStreams {
+		stream.VideoOnlyStreams[i].URL = c.mediaURL(stream.VideoOnlyStreams[i].URL)
+	}
+	for i := range stream.AudioStreams {
+		stream.AudioStreams[i].URL = c.mediaURL(stream.AudioStreams[i].URL)
+	}
+	stream.HLSURL = c.mediaURL(stream.HLSURL)
+	stream.DashMPDURL = c.mediaURL(stream.DashMPDURL)
+}
+
+func (c *Client) mediaURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "nicovideo?") {
+		raw = "proxy/" + raw
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.IsAbs() {
+		return raw
+	}
+	base, err := url.Parse(strings.TrimRight(c.baseURL, "/") + "/")
+	if err != nil {
+		return raw
+	}
+	return base.ResolveReference(parsed).String()
 }
 
 func NormalizeWatchURL(rawURL string) (string, error) {
