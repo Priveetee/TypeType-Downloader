@@ -95,7 +95,7 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	var stream *typetype.StreamResponse
 	if err := retry(ctx, 3, "stream extraction", func() error {
 		var fetchErr error
-		stream, fetchErr = r.streams.FetchStream(ctx, record.URL)
+		stream, fetchErr = r.streams.FetchStream(ctx, record.URL, record.Authorization)
 		return fetchErr
 	}); err != nil {
 		return err

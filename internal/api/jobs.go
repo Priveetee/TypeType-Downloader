@@ -27,7 +27,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_url", err.Error())
 		return
 	}
-	record, cached, created, err := s.store.Create(normalized, request.Options)
+	record, cached, created, err := s.store.Create(normalized, request.Options, r.Header.Get("Authorization"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "create_failed", err.Error())
 		return

@@ -8,12 +8,13 @@ import (
 )
 
 type cacheInput struct {
-	URL     string  `json:"url"`
-	Options Options `json:"options"`
+	URL           string  `json:"url"`
+	Options       Options `json:"options"`
+	Authorization string  `json:"authorization,omitempty"`
 }
 
-func CacheKey(rawURL string, options Options) (string, error) {
-	payload, err := json.Marshal(cacheInput{URL: strings.TrimSpace(rawURL), Options: normalizeOptions(options)})
+func CacheKey(rawURL string, options Options, authorization string) (string, error) {
+	payload, err := json.Marshal(cacheInput{URL: strings.TrimSpace(rawURL), Options: normalizeOptions(options), Authorization: strings.TrimSpace(authorization)})
 	if err != nil {
 		return "", err
 	}

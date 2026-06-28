@@ -90,24 +90,25 @@ type Progress struct {
 }
 
 type Record struct {
-	ID         string
-	CacheKey   string
-	URL        string
-	Options    Options
-	Status     Status
-	Title      string
-	Error      *string
-	ErrorCode  *string
-	Artifact   string
-	ExpiresAt  *time.Time
-	Storage    string
-	Resolved   *ResolvedOutput
-	Progress   Progress
-	QueuedAt   time.Time
-	StartedAt  *time.Time
-	FinishedAt *time.Time
-	DownloadMs *int64
-	MuxMs      *int64
-	TotalMs    *int64
-	Cancel     func()
+	ID            string
+	CacheKey      string
+	URL           string
+	Authorization string
+	Options       Options
+	Status        Status
+	Title         string
+	Error         *string
+	ErrorCode     *string
+	Artifact      string
+	ExpiresAt     *time.Time
+	Storage       string
+	Resolved      *ResolvedOutput
+	Progress      Progress
+	QueuedAt      time.Time
+	StartedAt     *time.Time
+	FinishedAt    *time.Time
+	DownloadMs    *int64
+	MuxMs         *int64
+	TotalMs       *int64
+	Cancel        func()
 }

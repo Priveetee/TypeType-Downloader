@@ -7,7 +7,7 @@ import (
 
 func TestStoreCreateStartProgressDone(t *testing.T) {
 	store := NewStore("http://localhost")
-	record, _, _, err := store.Create("https://example.com/watch?v=1", Options{})
+	record, _, _, err := store.Create("https://example.com/watch?v=1", Options{}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestStoreCreateStartProgressDone(t *testing.T) {
 
 func TestStoreCancelQueuedMarksFailed(t *testing.T) {
 	store := NewStore("http://localhost")
-	record, _, _, err := store.Create("https://example.com/watch?v=1", Options{})
+	record, _, _, err := store.Create("https://example.com/watch?v=1", Options{}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestStoreCancelQueuedMarksFailed(t *testing.T) {
 
 func TestStoreFailPublishesError(t *testing.T) {
 	store := NewStore("http://localhost")
-	record, _, _, err := store.Create("https://example.com/watch?v=1", Options{})
+	record, _, _, err := store.Create("https://example.com/watch?v=1", Options{}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestStoreFailPublishesError(t *testing.T) {
 
 func TestStoreDeduplicatesDoneJobs(t *testing.T) {
 	store := NewStore("http://localhost")
-	first, cached, created, err := store.Create("https://example.com/watch?v=1", Options{Container: "mp4"})
+	first, cached, created, err := store.Create("https://example.com/watch?v=1", Options{Container: "mp4"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestStoreDeduplicatesDoneJobs(t *testing.T) {
 		t.Fatalf("first create cached=%v created=%v", cached, created)
 	}
 	store.Done(first.ID, "/tmp/out.mp4", "local", nil, 10, 20)
-	second, cached, created, err := store.Create("https://example.com/watch?v=1", Options{Container: "mp4"})
+	second, cached, created, err := store.Create("https://example.com/watch?v=1", Options{Container: "mp4"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,16 +78,34 @@ func TestStoreDeduplicatesDoneJobs(t *testing.T) {
 
 func TestStoreDeduplicatesRunningJobsWithoutCachedFlag(t *testing.T) {
 	store := NewStore("http://localhost")
-	first, _, _, err := store.Create("https://example.com/watch?v=1", Options{Container: "mp4"})
+	first, _, _, err := store.Create("https://example.com/watch?v=1", Options{Container: "mp4"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	store.Start(first.ID, func() {})
-	second, cached, created, err := store.Create("https://example.com/watch?v=1", Options{Container: "mp4"})
+	second, cached, created, err := store.Create("https://example.com/watch?v=1", Options{Container: "mp4"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if second.ID != first.ID || cached || created {
 		t.Fatalf("second id=%s cached=%v created=%v", second.ID, cached, created)
+	}
+}
+
+func TestStoreAuthorizationScopesCacheKey(t *testing.T) {
+	store := NewStore("http://localhost")
+	first, _, firstCreated, err := store.Create("https://example.com/watch?v=1", Options{Container: "mp4"}, "Bearer one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, secondCreated, err := store.Create("https://example.com/watch?v=1", Options{Container: "mp4"}, "Bearer two")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !firstCreated || !secondCreated || first.ID == second.ID {
+		t.Fatalf("first=%s created=%v second=%s created=%v", first.ID, firstCreated, second.ID, secondCreated)
+	}
+	if first.Authorization != "Bearer one" || second.Authorization != "Bearer two" {
+		t.Fatalf("authorization was not retained in memory")
 	}
 }

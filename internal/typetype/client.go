@@ -25,7 +25,7 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-func (c *Client) FetchStream(ctx context.Context, rawURL string) (*StreamResponse, error) {
+func (c *Client) FetchStream(ctx context.Context, rawURL string, authorization string) (*StreamResponse, error) {
 	resolved, err := NormalizeWatchURL(rawURL)
 	if err != nil {
 		return nil, err
@@ -34,6 +34,9 @@ func (c *Client) FetchStream(ctx context.Context, rawURL string) (*StreamRespons
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
+	}
+	if authorization = strings.TrimSpace(authorization); authorization != "" {
+		req.Header.Set("Authorization", authorization)
 	}
 	res, err := c.http.Do(req)
 	if err != nil {
