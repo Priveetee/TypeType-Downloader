@@ -62,15 +62,22 @@ func SelectMP4WithOptions(stream *typetype.StreamResponse, options Options) (*Se
 	if !ok {
 		return nil, fmt.Errorf("no compatible mp4 video-only stream for codec %s", options.VideoCodecPrefix)
 	}
-	audio, ok := selectAudio(stream.AudioStreams, stream.PreferredDefaultAudioID, options)
+	audioOptions := options
+	outputContainer := options.Container
+	if video.DeliveryMethod == "sabr" {
+		audioOptions.Container = "mp4"
+		audioOptions.AudioCodecPrefix = "mp4a"
+		outputContainer = "mp4"
+	}
+	audio, ok := selectAudio(stream.AudioStreams, stream.PreferredDefaultAudioID, audioOptions)
 	if !ok {
-		return nil, fmt.Errorf("no compatible m4a audio stream for codec %s", options.AudioCodecPrefix)
+		return nil, fmt.Errorf("no compatible m4a audio stream for codec %s", audioOptions.AudioCodecPrefix)
 	}
 	return &Selection{
 		Title:     stream.Title,
 		Video:     video,
 		Audio:     audio,
-		Container: options.Container,
+		Container: outputContainer,
 	}, nil
 }
 
@@ -113,7 +120,7 @@ func selectVideo(streams []typetype.VideoStreamItem, options Options) (typetype.
 		if options.VideoItag > 0 && stream.Itag != options.VideoItag {
 			continue
 		}
-		if stream.URL == "" || stream.ContentLength <= 0 || !strings.Contains(stream.MimeType, options.Container) || !strings.HasPrefix(codec, options.VideoCodecPrefix) {
+		if !playableVideo(stream) || !strings.Contains(stream.MimeType, options.Container) || !strings.HasPrefix(codec, options.VideoCodecPrefix) {
 			continue
 		}
 		if options.MaxHeight > 0 && stream.Height > options.MaxHeight {
@@ -135,7 +142,7 @@ func selectAudio(streams []typetype.AudioStreamItem, preferredTrackID *string, o
 		if options.AudioItag > 0 && stream.Itag != options.AudioItag {
 			continue
 		}
-		if stream.URL == "" || stream.ContentLength <= 0 || !strings.Contains(stream.MimeType, options.Container) || !strings.HasPrefix(codec, options.AudioCodecPrefix) {
+		if !playableAudio(stream) || !strings.Contains(stream.MimeType, options.Container) || !strings.HasPrefix(codec, options.AudioCodecPrefix) {
 			continue
 		}
 		if !found || audioRank(stream, preferredTrackID) > audioRank(best, preferredTrackID) {
@@ -144,29 +151,4 @@ func selectAudio(streams []typetype.AudioStreamItem, preferredTrackID *string, o
 		}
 	}
 	return best, found
-}
-
-func audioRank(stream typetype.AudioStreamItem, preferredTrackID *string) int {
-	rank := streamBitrate(stream.Bitrate)
-	if preferredTrackID != nil && stream.AudioTrackID != nil && *preferredTrackID == *stream.AudioTrackID {
-		rank += 1_000_000
-	}
-	if stream.IsOriginal {
-		rank += 500_000
-	}
-	return rank
-}
-
-func streamBitrate(value *int) int {
-	if value == nil {
-		return 0
-	}
-	return *value
-}
-
-func stringValue(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
 }

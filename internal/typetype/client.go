@@ -54,6 +54,14 @@ func (c *Client) FetchStream(ctx context.Context, rawURL string, authorization s
 	return &stream, nil
 }
 
+func (c *Client) MediaURL(path string) string {
+	trimmed := strings.TrimSpace(path)
+	if strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://") {
+		return trimmed
+	}
+	return c.baseURL + "/" + strings.TrimLeft(trimmed, "/")
+}
+
 func NormalizeWatchURL(rawURL string) (string, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {

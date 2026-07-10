@@ -47,3 +47,10 @@ func TestFetchStreamForwardsAuthorization(t *testing.T) {
 		t.Fatalf("title = %q, want Title", stream.Title)
 	}
 }
+
+func TestClientMediaURLPreservesAPIBase(t *testing.T) {
+	client := NewClient("http://server:8080/api")
+	if got := client.MediaURL("/sabr/manifest/video"); got != "http://server:8080/api/sabr/manifest/video" {
+		t.Fatalf("MediaURL() = %q", got)
+	}
+}

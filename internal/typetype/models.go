@@ -14,22 +14,25 @@ type StreamResponse struct {
 }
 
 type VideoStreamItem struct {
-	URL           string  `json:"url"`
-	MimeType      string  `json:"mimeType"`
-	Format        string  `json:"format"`
-	Resolution    string  `json:"resolution"`
-	Bitrate       *int    `json:"bitrate"`
-	Codec         *string `json:"codec"`
-	IsVideoOnly   bool    `json:"isVideoOnly"`
-	Itag          int     `json:"itag"`
-	Width         int     `json:"width"`
-	Height        int     `json:"height"`
-	FPS           int     `json:"fps"`
-	ContentLength int64   `json:"contentLength"`
-	InitStart     int64   `json:"initStart"`
-	InitEnd       int64   `json:"initEnd"`
-	IndexStart    int64   `json:"indexStart"`
-	IndexEnd      int64   `json:"indexEnd"`
+	URL            string  `json:"url"`
+	MimeType       string  `json:"mimeType"`
+	Format         string  `json:"format"`
+	Resolution     string  `json:"resolution"`
+	Bitrate        *int    `json:"bitrate"`
+	Codec          *string `json:"codec"`
+	IsVideoOnly    bool    `json:"isVideoOnly"`
+	Itag           int     `json:"itag"`
+	Width          int     `json:"width"`
+	Height         int     `json:"height"`
+	FPS            int     `json:"fps"`
+	ContentLength  int64   `json:"contentLength"`
+	InitStart      int64   `json:"initStart"`
+	InitEnd        int64   `json:"initEnd"`
+	IndexStart     int64   `json:"indexStart"`
+	IndexEnd       int64   `json:"indexEnd"`
+	DeliveryMethod string  `json:"deliveryMethod"`
+	ManifestURL    string  `json:"manifestUrl"`
+	SABRSessionURL string  `json:"sabrSessionUrl"`
 }
 
 type AudioStreamItem struct {
@@ -49,4 +52,7 @@ type AudioStreamItem struct {
 	AudioTrackName *string `json:"audioTrackName"`
 	AudioLocale    *string `json:"audioLocale"`
 	IsOriginal     bool    `json:"isOriginal"`
+	DeliveryMethod string  `json:"deliveryMethod"`
+	ManifestURL    string  `json:"manifestUrl"`
+	SABRSessionURL string  `json:"sabrSessionUrl"`
 }
