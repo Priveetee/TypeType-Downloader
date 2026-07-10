@@ -107,6 +107,9 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	if err != nil {
 		return err
 	}
+	if selection.Video.DeliveryMethod == "sabr" {
+		return r.runSABR(ctx, id, record, stream.Title, selection)
+	}
 	paths := artifact.Build(r.cfg.DataDir, id, stream.Title, selection.Container)
 	preserveOutput := false
 	defer func() { cleanupWork(paths, preserveOutput) }()
@@ -155,6 +158,9 @@ func (r *Runner) runAudioOnly(ctx context.Context, id string, record *job.Record
 	selection, err := selector.SelectAudioOnly(stream, selectorOptions(record.Options))
 	if err != nil {
 		return err
+	}
+	if selection.Audio.DeliveryMethod == "sabr" {
+		return r.runSABRAudio(ctx, id, record, stream.Title, selection)
 	}
 	paths := artifact.Build(r.cfg.DataDir, id, stream.Title, selection.Container)
 	preserveOutput := false
