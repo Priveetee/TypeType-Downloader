@@ -34,6 +34,8 @@ type Config struct {
 	Muxer            string
 	HTTP2            bool
 	MaxQueueSize     int
+	MinFreeBytes     int64
+	MinFreePercent   int
 }
 
 func Load() Config {
@@ -65,6 +67,8 @@ func Load() Config {
 		Muxer:            env("MUXER", "avformat"),
 		HTTP2:            envBool("DOWNLOAD_HTTP2", true),
 		MaxQueueSize:     envInt("MAX_QUEUE_SIZE", 100),
+		MinFreeBytes:     envSize("STORAGE_MIN_FREE_BYTES", 10<<30),
+		MinFreePercent:   envInt("STORAGE_MIN_FREE_PERCENT", 20),
 	}
 }
 

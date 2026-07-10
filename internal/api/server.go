@@ -9,12 +9,14 @@ import (
 	"typetype-downloader-go/internal/artifact"
 	"typetype-downloader-go/internal/job"
 	"typetype-downloader-go/internal/pipeline"
+	"typetype-downloader-go/internal/storage"
 )
 
 type Server struct {
 	store  *job.Store
 	runner *pipeline.Runner
 	files  artifact.Store
+	disk   *storage.Monitor
 	checks []HealthCheck
 }
 
@@ -23,8 +25,8 @@ type HealthCheck interface {
 	Health(context.Context) error
 }
 
-func NewServer(store *job.Store, runner *pipeline.Runner, files artifact.Store, health ...HealthCheck) *Server {
-	return &Server{store: store, runner: runner, files: files, checks: health}
+func NewServer(store *job.Store, runner *pipeline.Runner, files artifact.Store, disk *storage.Monitor, health ...HealthCheck) *Server {
+	return &Server{store: store, runner: runner, files: files, disk: disk, checks: health}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -52,6 +54,12 @@ func (s *Server) healthDeep(w http.ResponseWriter, r *http.Request) {
 		} else {
 			checks[check.Name()] = "ok"
 		}
+	}
+	if err := s.disk.Health(); err != nil {
+		checks[s.disk.Name()] = err.Error()
+		status = http.StatusServiceUnavailable
+	} else {
+		checks[s.disk.Name()] = "ok"
 	}
 	writeJSON(w, status, map[string]any{"status": statusText(status), "checks": checks})
 }

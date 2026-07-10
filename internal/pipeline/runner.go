@@ -108,6 +108,8 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 		return err
 	}
 	paths := artifact.Build(r.cfg.DataDir, id, stream.Title, selection.Container)
+	preserveOutput := false
+	defer func() { cleanupWork(paths, preserveOutput) }()
 	resolved := resolvedOutput(selection, paths.Name)
 	r.store.Resolve(id, stream.Title, resolved)
 	if err := os.MkdirAll(paths.WorkDir, 0o755); err != nil {
@@ -144,11 +146,7 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 		expires = &expiresAt
 	}
 	r.store.Done(id, saved.Location, saved.Backend, expires, downloadMs, muxMs)
-	if saved.Backend != "local" {
-		_ = os.Remove(paths.Output)
-	}
-	_ = os.Remove(paths.Video)
-	_ = os.Remove(paths.Audio)
+	preserveOutput = saved.Backend == "local"
 	slog.Info("job completed", "id", id, "ms", time.Since(started).Milliseconds())
 	return nil
 }
@@ -159,6 +157,8 @@ func (r *Runner) runAudioOnly(ctx context.Context, id string, record *job.Record
 		return err
 	}
 	paths := artifact.Build(r.cfg.DataDir, id, stream.Title, selection.Container)
+	preserveOutput := false
+	defer func() { cleanupWork(paths, preserveOutput) }()
 	resolved := audioResolvedOutput(selection, paths.Name)
 	r.store.Resolve(id, stream.Title, resolved)
 	if err := os.MkdirAll(paths.WorkDir, 0o755); err != nil {
@@ -185,9 +185,7 @@ func (r *Runner) runAudioOnly(ctx context.Context, id string, record *job.Record
 		expires = &expiresAt
 	}
 	r.store.Done(id, saved.Location, saved.Backend, expires, downloadMs, 0)
-	if saved.Backend != "local" {
-		_ = os.Remove(paths.Output)
-	}
+	preserveOutput = saved.Backend == "local"
 	slog.Info("audio job completed", "id", id, "ms", time.Since(started).Milliseconds())
 	return nil
 }

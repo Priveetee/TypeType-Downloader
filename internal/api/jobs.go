@@ -11,6 +11,19 @@ import (
 )
 
 func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
+	capacity, err := s.disk.Check()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "storage_check_failed", err.Error())
+		return
+	}
+	if !capacity.Available {
+		writeJSON(w, http.StatusInsufficientStorage, map[string]any{
+			"code": "insufficient_storage", "errorCode": "insufficient_storage",
+			"error":     "download storage is below the free-space threshold",
+			"freeBytes": capacity.FreeBytes, "requiredFreeBytes": capacity.RequiredFreeBytes,
+		})
+		return
+	}
 	defer r.Body.Close()
 	var request job.CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
