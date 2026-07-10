@@ -80,12 +80,7 @@ jobs:
     if: github.ref_name == 'dev'
     runs-on: [self-hosted, Linux, X64, arko, downloader]
     environment: beta
-    permissions:
-      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
       - name: Check deployment configuration
         id: deploy-config
         env:
@@ -121,5 +116,4 @@ jobs:
           TYPE_TYPE_DEPLOY_USER: ${{ secrets.TYPE_TYPE_DEPLOY_USER }}
         run: |
           ssh -i ~/.ssh/typetype_deploy_key -p "$TYPE_TYPE_DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$TYPE_TYPE_DEPLOY_USER@$TYPE_TYPE_DEPLOY_HOST" "/usr/local/sbin/typetype-beta-update"
-          ssh -i ~/.ssh/typetype_deploy_key -p "$TYPE_TYPE_DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$TYPE_TYPE_DEPLOY_USER@$TYPE_TYPE_DEPLOY_HOST" "bash -s" < scripts/deploy-beta.sh
-          curl --fail --retry 12 --retry-delay 2 --retry-all-errors --silent --show-error https://beta.typetype.video/api/downloader/health
+          curl --fail --silent --show-error https://beta.typetype.video/api/health
