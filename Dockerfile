@@ -14,7 +14,7 @@ RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/typetype-downloade
 FROM debian:trixie-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libavformat61 libavcodec61 libavutil59 \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg libavformat61 libavcodec61 libavutil59 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --system --create-home --home-dir /app typetype
