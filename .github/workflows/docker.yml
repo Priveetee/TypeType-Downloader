@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   build-and-push:
-    runs-on: [self-hosted, Linux, X64, arko, android]
+    runs-on: [self-hosted, Linux, X64, arko, downloader]
     permissions:
       contents: read
       packages: write
@@ -78,7 +78,7 @@ jobs:
   deploy-beta:
     needs: build-and-push
     if: github.ref_name == 'dev'
-    runs-on: [self-hosted, Linux, X64, arko, android]
+    runs-on: [self-hosted, Linux, X64, arko, downloader]
     environment: beta
     steps:
       - name: Check deployment configuration

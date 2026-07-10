@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   coverage:
-    runs-on: [self-hosted, Linux, X64, arko, android]
+    runs-on: [self-hosted, Linux, X64, arko, downloader]
     permissions:
       contents: read
     steps:
