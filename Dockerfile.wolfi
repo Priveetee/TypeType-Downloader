@@ -1,5 +1,8 @@
 FROM cgr.dev/chainguard/go:latest-dev AS build
 
+ARG BUILD_VERSION=0.1.0
+ARG BUILD_REVISION=development
+ARG BUILD_TIME=unknown
 USER root
 WORKDIR /src
 RUN apk add --no-cache build-base pkgconf ffmpeg-8.1-dev
@@ -8,7 +11,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/typetype-downloader-go ./cmd/server
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w -X typetype-downloader-go/internal/buildinfo.Version=$BUILD_VERSION -X typetype-downloader-go/internal/buildinfo.Revision=$BUILD_REVISION -X typetype-downloader-go/internal/buildinfo.BuildTime=$BUILD_TIME" -o /out/typetype-downloader-go ./cmd/server
 
 FROM cgr.dev/chainguard/wolfi-base:latest
 
