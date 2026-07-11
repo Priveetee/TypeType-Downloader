@@ -81,13 +81,17 @@ func (r *Runner) process(parent context.Context, id string) {
 	r.store.Start(id, cancel)
 	defer cancel()
 	if err := r.run(ctx, id, record); err != nil {
-		code := "download_failed"
-		if errors.Is(err, context.Canceled) {
-			code = "cancelled"
-		}
+		code := failureCode(ctx, err)
 		r.store.Fail(id, code, err)
 		slog.Warn("job failed", "id", id, "error", err)
 	}
+}
+
+func failureCode(ctx context.Context, err error) string {
+	if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+		return "cancelled"
+	}
+	return "download_failed"
 }
 
 func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
