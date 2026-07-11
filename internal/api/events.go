@@ -23,7 +23,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request, id string) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
-	heartbeat := time.NewTicker(15 * time.Second)
+	heartbeat := time.NewTicker(5 * time.Second)
 	defer heartbeat.Stop()
 	for {
 		select {
