@@ -16,6 +16,9 @@ concurrency:
 jobs:
   go:
     runs-on: [self-hosted, Linux, X64, arko, downloader]
+    env:
+      GOCACHE: ${{ runner.temp }}/go-build
+      GOMODCACHE: ${{ runner.temp }}/go-mod
     permissions:
       contents: read
     steps:
@@ -24,6 +27,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: false
 
       - name: Format check
         run: test -z "$(gofmt -l cmd internal)"
