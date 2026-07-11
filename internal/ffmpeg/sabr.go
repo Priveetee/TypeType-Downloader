@@ -47,6 +47,7 @@ func sabrURL(options SABROptions) (string, error) {
 		return "", err
 	}
 	query := parsed.Query()
+	query.Set("workload", "download")
 	query.Set("audioItag", strconv.Itoa(options.AudioItag))
 	if options.VideoItag > 0 {
 		query.Set("videoItag", strconv.Itoa(options.VideoItag))

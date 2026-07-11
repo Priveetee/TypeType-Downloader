@@ -23,4 +23,7 @@ func TestSABRURLIncludesSelectedTracks(t *testing.T) {
 	if query.Get("videoItag") != "137" || query.Get("audioItag") != "140" || query.Get("audioTrackId") != "fr-FR.4" {
 		t.Fatalf("unexpected query: %s", parsed.RawQuery)
 	}
+	if query.Get("workload") != "download" {
+		t.Fatalf("unexpected workload: %s", parsed.RawQuery)
+	}
 }
