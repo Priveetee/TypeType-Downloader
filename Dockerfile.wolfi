@@ -12,7 +12,7 @@ RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/typetype-downloade
 
 FROM cgr.dev/chainguard/wolfi-base:latest
 
-RUN apk add --no-cache ca-certificates ffmpeg-8.1-libavformat62 ffmpeg-8.1-libavcodec62 ffmpeg-8.1-libavutil60
+RUN apk add --no-cache ca-certificates ffmpeg-8.1
 
 RUN addgroup -S typetype && adduser -S -G typetype -h /app typetype
 WORKDIR /app

@@ -75,6 +75,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Verify published FFmpeg runtime
+        run: |
+          repository="${GITHUB_REPOSITORY,,}"
+          suffix=""
+          if [ "$GITHUB_REF_NAME" = "dev" ]; then suffix="-beta"; fi
+          image="$REGISTRY/$repository$suffix:sha-${GITHUB_SHA::7}"
+          docker pull "$image"
+          docker run --rm --entrypoint ffmpeg "$image" -version
+
   deploy-beta:
     needs: build-and-push
     if: github.ref_name == 'dev'
