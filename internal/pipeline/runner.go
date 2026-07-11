@@ -165,6 +165,9 @@ func (r *Runner) runAudioOnly(ctx context.Context, id string, record *job.Record
 	if selection.Audio.DeliveryMethod == "sabr" {
 		return r.runSABRAudio(ctx, id, record, stream.Title, selection)
 	}
+	if selection.Audio.ContentLength <= 0 {
+		return r.runRemoteAudio(ctx, id, stream.Title, selection)
+	}
 	paths := artifact.Build(r.cfg.DataDir, id, stream.Title, selection.Container)
 	preserveOutput := false
 	defer func() { cleanupWork(paths, preserveOutput) }()

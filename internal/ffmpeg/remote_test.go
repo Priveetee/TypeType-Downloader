@@ -21,3 +21,10 @@ func TestRemoteInputLeavesNicoHeadersGeneric(t *testing.T) {
 		t.Fatalf("args = %v", args)
 	}
 }
+
+func TestRemoteAudioMapsOnlyAudio(t *testing.T) {
+	args := remoteAudioArgs("https://example.com/audio.m4s", "output.m4a")
+	if !slices.Contains(args, "0:a:0") || !slices.Contains(args, "-vn") {
+		t.Fatalf("args = %v", args)
+	}
+}
