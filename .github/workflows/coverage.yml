@@ -16,9 +16,6 @@ concurrency:
 jobs:
   coverage:
     runs-on: [self-hosted, Linux, X64, arko, downloader]
-    env:
-      GOCACHE: ${{ runner.temp }}/go-build
-      GOMODCACHE: ${{ runner.temp }}/go-mod
     permissions:
       contents: read
     steps:
@@ -28,6 +25,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+
+      - name: Isolate Go caches
+        run: |
+          echo "GOCACHE=$RUNNER_TEMP/go-build" >> "$GITHUB_ENV"
+          echo "GOMODCACHE=$RUNNER_TEMP/go-mod" >> "$GITHUB_ENV"
 
       - name: Run coverage
         run: go test ./... -coverprofile=coverage.out
