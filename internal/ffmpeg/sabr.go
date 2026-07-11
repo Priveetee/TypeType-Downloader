@@ -23,7 +23,7 @@ func DownloadSABR(ctx context.Context, options SABROptions, outputPath string) e
 	if err != nil {
 		return err
 	}
-	args := []string{"-y", "-hide_banner", "-loglevel", "error"}
+	args := sabrInputArgs()
 	if authorization := strings.TrimSpace(options.Authorization); authorization != "" {
 		args = append(args, "-headers", "Authorization: "+authorization+"\r\n")
 	}
@@ -39,6 +39,18 @@ func DownloadSABR(ctx context.Context, options SABROptions, outputPath string) e
 		return fmt.Errorf("ffmpeg SABR download failed: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+func sabrInputArgs() []string {
+	return []string{
+		"-y", "-hide_banner", "-loglevel", "error",
+		"-reconnect", "1",
+		"-reconnect_at_eof", "1",
+		"-reconnect_streamed", "1",
+		"-reconnect_on_network_error", "1",
+		"-reconnect_on_http_error", "4xx,5xx",
+		"-reconnect_delay_max", "10",
+	}
 }
 
 func sabrURL(options SABROptions) (string, error) {

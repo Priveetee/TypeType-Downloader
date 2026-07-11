@@ -23,10 +23,25 @@ func selectorOptions(options job.Options) selector.Options {
 	return selector.Options{
 		Container:        container,
 		MaxHeight:        maxHeight,
-		VideoCodecPrefix: options.VideoCodec,
-		AudioCodecPrefix: options.AudioCodec,
+		VideoCodecPrefix: codecPrefix(options.VideoCodec),
+		AudioCodecPrefix: codecPrefix(options.AudioCodec),
 		VideoItag:        parseItag(options.VideoItag),
 		AudioItag:        parseItag(options.AudioItag),
+	}
+}
+
+func codecPrefix(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "h264", "x264":
+		return "avc1"
+	case "h265", "hevc", "x265":
+		return "hev1"
+	case "av1":
+		return "av01"
+	case "aac":
+		return "mp4a"
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
 	}
 }
 

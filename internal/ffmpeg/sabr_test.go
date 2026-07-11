@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"net/url"
+	"slices"
 	"testing"
 )
 
@@ -25,5 +26,14 @@ func TestSABRURLIncludesSelectedTracks(t *testing.T) {
 	}
 	if query.Get("workload") != "download" {
 		t.Fatalf("unexpected workload: %s", parsed.RawQuery)
+	}
+}
+
+func TestSABRInputRetriesTransientHTTPFailures(t *testing.T) {
+	args := sabrInputArgs()
+	for _, value := range []string{"-reconnect", "-reconnect_streamed", "-reconnect_on_network_error", "-reconnect_on_http_error", "4xx,5xx"} {
+		if !slices.Contains(args, value) {
+			t.Fatalf("missing ffmpeg retry argument %q in %v", value, args)
+		}
 	}
 }

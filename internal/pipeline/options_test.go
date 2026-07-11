@@ -35,3 +35,10 @@ func TestIsAudioOnlyIsCaseInsensitive(t *testing.T) {
 		t.Fatal("expected video mode to not be audio-only")
 	}
 }
+
+func TestSelectorOptionsNormalizesCodecNames(t *testing.T) {
+	options := selectorOptions(job.Options{VideoCodec: "H264", AudioCodec: "AAC"})
+	if options.VideoCodecPrefix != "avc1" || options.AudioCodecPrefix != "mp4a" {
+		t.Fatalf("codec prefixes = %s+%s, want avc1+mp4a", options.VideoCodecPrefix, options.AudioCodecPrefix)
+	}
+}
