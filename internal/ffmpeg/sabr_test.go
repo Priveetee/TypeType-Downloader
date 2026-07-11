@@ -36,4 +36,7 @@ func TestSABRInputRetriesTransientHTTPFailures(t *testing.T) {
 			t.Fatalf("missing ffmpeg retry argument %q in %v", value, args)
 		}
 	}
+	if slices.Contains(args, "-reconnect_at_eof") {
+		t.Fatalf("static SABR manifests must not reconnect at EOF: %v", args)
+	}
 }
