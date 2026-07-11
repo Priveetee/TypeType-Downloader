@@ -62,6 +62,14 @@ func (c *Client) MediaURL(path string) string {
 	return c.baseURL + "/" + strings.TrimLeft(trimmed, "/")
 }
 
+func (c *Client) ProxyMediaURL(rawURL string) string {
+	path := "/proxy"
+	if parsed, err := url.Parse(rawURL); err == nil && strings.Contains(parsed.Host, "nicovideo.jp") {
+		path = "/proxy/nicovideo"
+	}
+	return c.baseURL + path + "?url=" + url.QueryEscape(rawURL)
+}
+
 func NormalizeWatchURL(rawURL string) (string, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {

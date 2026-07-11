@@ -3,6 +3,7 @@ package typetype
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -52,5 +53,21 @@ func TestClientMediaURLPreservesAPIBase(t *testing.T) {
 	client := NewClient("http://server:8080/api")
 	if got := client.MediaURL("/sabr/manifest/video"); got != "http://server:8080/api/sabr/manifest/video" {
 		t.Fatalf("MediaURL() = %q", got)
+	}
+}
+
+func TestProxyMediaURLUsesNicoManifestProxy(t *testing.T) {
+	client := NewClient("http://server:8080")
+	got := client.ProxyMediaURL("https://delivery.domand.nicovideo.jp/video.m3u8#cookie=value")
+	if !strings.HasPrefix(got, "http://server:8080/proxy/nicovideo?url=") {
+		t.Fatalf("url = %s", got)
+	}
+}
+
+func TestProxyMediaURLUsesGeneralProxy(t *testing.T) {
+	client := NewClient("http://server:8080")
+	got := client.ProxyMediaURL("https://upos.example/video.m4s")
+	if !strings.HasPrefix(got, "http://server:8080/proxy?url=") {
+		t.Fatalf("url = %s", got)
 	}
 }

@@ -138,3 +138,17 @@ func TestSelectAudioOnlyCanSelectWebMOpus(t *testing.T) {
 		t.Fatalf("selection = %s/%d, want webm/251", selection.Container, selection.Audio.Itag)
 	}
 }
+
+func TestSelectMP4WithOptionsAcceptsUnknownRemoteMetadata(t *testing.T) {
+	stream := &typetype.StreamResponse{
+		VideoOnlyStreams: []typetype.VideoStreamItem{{URL: "video.m3u8", MimeType: "video/mp4", Itag: -1}},
+		AudioStreams:     []typetype.AudioStreamItem{{URL: "audio.m3u8", MimeType: "audio/mp4", Itag: -1}},
+	}
+	selection, err := SelectMP4WithOptions(stream, Options{Container: "mp4"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selection.Video.URL != "video.m3u8" || selection.Audio.URL != "audio.m3u8" {
+		t.Fatalf("selection = %s + %s", selection.Video.URL, selection.Audio.URL)
+	}
+}

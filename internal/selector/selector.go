@@ -120,7 +120,7 @@ func selectVideo(streams []typetype.VideoStreamItem, options Options) (typetype.
 		if options.VideoItag > 0 && stream.Itag != options.VideoItag {
 			continue
 		}
-		if !playableVideo(stream) || !strings.Contains(stream.MimeType, options.Container) || !strings.HasPrefix(codec, options.VideoCodecPrefix) {
+		if !playableVideo(stream) || !strings.Contains(stream.MimeType, options.Container) || codec != "" && !strings.HasPrefix(codec, options.VideoCodecPrefix) {
 			continue
 		}
 		if options.MaxHeight > 0 && stream.Height > options.MaxHeight {
@@ -142,7 +142,7 @@ func selectAudio(streams []typetype.AudioStreamItem, preferredTrackID *string, o
 		if options.AudioItag > 0 && stream.Itag != options.AudioItag {
 			continue
 		}
-		if !playableAudio(stream) || !strings.Contains(stream.MimeType, options.Container) || !strings.HasPrefix(codec, options.AudioCodecPrefix) {
+		if !playableAudio(stream) || !strings.Contains(stream.MimeType, options.Container) || codec != "" && !strings.HasPrefix(codec, options.AudioCodecPrefix) {
 			continue
 		}
 		if !found || audioRank(stream, preferredTrackID) > audioRank(best, preferredTrackID) {

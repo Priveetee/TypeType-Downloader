@@ -3,11 +3,11 @@ package selector
 import "typetype-downloader-go/internal/typetype"
 
 func playableVideo(stream typetype.VideoStreamItem) bool {
-	return stream.URL != "" && stream.ContentLength > 0 || stream.DeliveryMethod == "sabr" && stream.ManifestURL != ""
+	return stream.URL != "" || stream.DeliveryMethod == "sabr" && stream.ManifestURL != ""
 }
 
 func playableAudio(stream typetype.AudioStreamItem) bool {
-	return stream.URL != "" && stream.ContentLength > 0 || stream.DeliveryMethod == "sabr" && stream.ManifestURL != ""
+	return stream.URL != "" || stream.DeliveryMethod == "sabr" && stream.ManifestURL != ""
 }
 
 func audioRank(stream typetype.AudioStreamItem, preferredTrackID *string) int {

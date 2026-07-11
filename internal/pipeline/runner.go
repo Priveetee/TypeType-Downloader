@@ -110,6 +110,9 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	if selection.Video.DeliveryMethod == "sabr" {
 		return r.runSABR(ctx, id, record, stream.Title, selection)
 	}
+	if selection.Video.ContentLength <= 0 || selection.Audio.ContentLength <= 0 {
+		return r.runRemote(ctx, id, stream.Title, selection)
+	}
 	paths := artifact.Build(r.cfg.DataDir, id, stream.Title, selection.Container)
 	preserveOutput := false
 	defer func() { cleanupWork(paths, preserveOutput) }()
