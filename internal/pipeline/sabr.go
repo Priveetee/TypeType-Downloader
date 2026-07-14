@@ -11,7 +11,8 @@ import (
 
 func (r *Runner) downloadSABR(ctx context.Context, id string, record *job.Record, selection *selector.Selection, output string) (int64, error) {
 	started := time.Now()
-	r.store.Progress(id, job.Progress{Stage: "download"})
+	totalBytes := selection.Video.ContentLength + selection.Audio.ContentLength
+	r.store.Progress(id, job.Progress{Stage: "download", TotalBytes: totalBytes})
 	trackID := ""
 	if selection.Audio.AudioTrackID != nil {
 		trackID = *selection.Audio.AudioTrackID
@@ -22,13 +23,14 @@ func (r *Runner) downloadSABR(ctx context.Context, id string, record *job.Record
 		VideoItag:     selection.Video.Itag,
 		AudioItag:     selection.Audio.Itag,
 		AudioTrackID:  trackID,
-	}, output)
+	}, output, r.sabrProgress(id, started, totalBytes))
 	return time.Since(started).Milliseconds(), err
 }
 
 func (r *Runner) downloadSABRAudio(ctx context.Context, id string, record *job.Record, selection *selector.AudioSelection, output string) (int64, error) {
 	started := time.Now()
-	r.store.Progress(id, job.Progress{Stage: "download"})
+	totalBytes := selection.Audio.ContentLength
+	r.store.Progress(id, job.Progress{Stage: "download", TotalBytes: totalBytes})
 	trackID := ""
 	if selection.Audio.AudioTrackID != nil {
 		trackID = *selection.Audio.AudioTrackID
@@ -39,6 +41,25 @@ func (r *Runner) downloadSABRAudio(ctx context.Context, id string, record *job.R
 		AudioItag:     selection.Audio.Itag,
 		AudioTrackID:  trackID,
 		AudioOnly:     true,
-	}, output)
+	}, output, r.sabrProgress(id, started, totalBytes))
 	return time.Since(started).Milliseconds(), err
+}
+
+func (r *Runner) sabrProgress(id string, started time.Time, totalBytes int64) ffmpeg.ProgressFunc {
+	return func(downloadedBytes int64) {
+		if totalBytes > 0 && downloadedBytes > totalBytes {
+			downloadedBytes = totalBytes
+		}
+		elapsed := time.Since(started).Seconds()
+		speed := int64(0)
+		if elapsed > 0 {
+			speed = int64(float64(downloadedBytes) / elapsed)
+		}
+		r.store.Progress(id, job.Progress{
+			Stage:               "download",
+			DownloadedBytes:     downloadedBytes,
+			TotalBytes:          totalBytes,
+			SpeedBytesPerSecond: speed,
+		})
+	}
 }

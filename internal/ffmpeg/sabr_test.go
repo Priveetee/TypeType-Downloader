@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"net/url"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -38,5 +39,18 @@ func TestSABRInputRetriesTransientHTTPFailures(t *testing.T) {
 	}
 	if slices.Contains(args, "-reconnect_at_eof") {
 		t.Fatalf("static SABR manifests must not reconnect at EOF: %v", args)
+	}
+}
+
+func TestReadProgressPublishesChangedTotalSize(t *testing.T) {
+	values := make([]int64, 0, 2)
+	err := readProgress(strings.NewReader("frame=1\ntotal_size=1024\nprogress=continue\ntotal_size=1024\ntotal_size=4096\n"), func(downloadedBytes int64) {
+		values = append(values, downloadedBytes)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(values, []int64{1024, 4096}) {
+		t.Fatalf("progress = %v, want [1024 4096]", values)
 	}
 }
