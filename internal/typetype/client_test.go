@@ -31,6 +31,9 @@ func TestNormalizeWatchURLKeepsDirectURL(t *testing.T) {
 }
 func TestFetchStreamForwardsAuthorization(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.URL.Path, "/streams/youtube/sabr"; got != want {
+			t.Fatalf("path = %q, want %q", got, want)
+		}
 		if got, want := r.Header.Get("Authorization"), "Bearer user-token"; got != want {
 			t.Fatalf("Authorization = %q, want %q", got, want)
 		}
@@ -46,6 +49,22 @@ func TestFetchStreamForwardsAuthorization(t *testing.T) {
 	}
 	if stream.Title != "Title" {
 		t.Fatalf("title = %q, want Title", stream.Title)
+	}
+}
+
+func TestFetchStreamKeepsGenericEndpointForOtherProviders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.URL.Path, "/streams"; got != want {
+			t.Fatalf("path = %q, want %q", got, want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"id","title":"Title","duration":1,"videoStreams":[],"videoOnlyStreams":[],"audioStreams":[],"hlsUrl":"","dashMpdUrl":""}`))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL)
+
+	if _, err := client.FetchStream(t.Context(), "https://www.nicovideo.jp/watch/sm9", ""); err != nil {
+		t.Fatal(err)
 	}
 }
 

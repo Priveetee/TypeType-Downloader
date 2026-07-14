@@ -30,7 +30,7 @@ func (c *Client) FetchStream(ctx context.Context, rawURL string, authorization s
 	if err != nil {
 		return nil, err
 	}
-	endpoint := c.baseURL + "/streams?url=" + url.QueryEscape(resolved)
+	endpoint := c.streamEndpoint(resolved)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -52,6 +52,21 @@ func (c *Client) FetchStream(ctx context.Context, rawURL string, authorization s
 		return nil, err
 	}
 	return &stream, nil
+}
+
+func (c *Client) streamEndpoint(rawURL string) string {
+	path := "/streams"
+	parsed, err := url.Parse(rawURL)
+	if err == nil && isYouTubeHost(parsed.Hostname()) {
+		path = "/streams/youtube/sabr"
+	}
+	return c.baseURL + path + "?url=" + url.QueryEscape(rawURL)
+}
+
+func isYouTubeHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	return host == "youtu.be" || host == "youtube.com" || strings.HasSuffix(host, ".youtube.com") ||
+		host == "youtube-nocookie.com" || strings.HasSuffix(host, ".youtube-nocookie.com")
 }
 
 func (c *Client) MediaURL(path string) string {
