@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
-	"typetype-downloader-go/internal/ffmpeg"
+	"typetype-downloader-go/internal/artifact"
 	"typetype-downloader-go/internal/job"
+	"typetype-downloader-go/internal/sabr"
 	"typetype-downloader-go/internal/selector"
 )
 
-func (r *Runner) downloadSABR(ctx context.Context, id string, record *job.Record, selection *selector.Selection, output string) (int64, error) {
+func (r *Runner) downloadSABR(ctx context.Context, id string, record *job.Record, selection *selector.Selection, paths artifact.Paths) (int64, error) {
 	started := time.Now()
 	totalBytes := selection.Video.ContentLength + selection.Audio.ContentLength
 	r.store.Progress(id, job.Progress{Stage: "download", TotalBytes: totalBytes})
@@ -17,17 +18,21 @@ func (r *Runner) downloadSABR(ctx context.Context, id string, record *job.Record
 	if selection.Audio.AudioTrackID != nil {
 		trackID = *selection.Audio.AudioTrackID
 	}
-	err := ffmpeg.DownloadSABR(ctx, ffmpeg.SABROptions{
+	err := sabr.Download(ctx, r.http, sabr.Options{
 		ManifestURL:   r.streams.MediaURL(selection.Video.ManifestURL),
 		Authorization: record.Authorization,
 		VideoItag:     selection.Video.Itag,
 		AudioItag:     selection.Audio.Itag,
 		AudioTrackID:  trackID,
-	}, output, r.sabrProgress(id, started, totalBytes))
+		Workers:       r.cfg.DownloadWorkers,
+		WorkDir:       paths.WorkDir,
+		VideoPath:     paths.Video,
+		AudioPath:     paths.Audio,
+	}, r.sabrProgress(id, started, totalBytes))
 	return time.Since(started).Milliseconds(), err
 }
 
-func (r *Runner) downloadSABRAudio(ctx context.Context, id string, record *job.Record, selection *selector.AudioSelection, output string) (int64, error) {
+func (r *Runner) downloadSABRAudio(ctx context.Context, id string, record *job.Record, selection *selector.AudioSelection, paths artifact.Paths) (int64, error) {
 	started := time.Now()
 	totalBytes := selection.Audio.ContentLength
 	r.store.Progress(id, job.Progress{Stage: "download", TotalBytes: totalBytes})
@@ -35,17 +40,20 @@ func (r *Runner) downloadSABRAudio(ctx context.Context, id string, record *job.R
 	if selection.Audio.AudioTrackID != nil {
 		trackID = *selection.Audio.AudioTrackID
 	}
-	err := ffmpeg.DownloadSABR(ctx, ffmpeg.SABROptions{
+	err := sabr.Download(ctx, r.http, sabr.Options{
 		ManifestURL:   r.streams.MediaURL(selection.Audio.ManifestURL),
 		Authorization: record.Authorization,
 		AudioItag:     selection.Audio.Itag,
 		AudioTrackID:  trackID,
 		AudioOnly:     true,
-	}, output, r.sabrProgress(id, started, totalBytes))
+		Workers:       r.cfg.DownloadWorkers,
+		WorkDir:       paths.WorkDir,
+		AudioPath:     paths.Output,
+	}, r.sabrProgress(id, started, totalBytes))
 	return time.Since(started).Milliseconds(), err
 }
 
-func (r *Runner) sabrProgress(id string, started time.Time, totalBytes int64) ffmpeg.ProgressFunc {
+func (r *Runner) sabrProgress(id string, started time.Time, totalBytes int64) sabr.ProgressFunc {
 	return func(downloadedBytes int64) {
 		if totalBytes > 0 && downloadedBytes > totalBytes {
 			downloadedBytes = totalBytes

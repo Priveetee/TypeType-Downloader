@@ -15,7 +15,17 @@ func (r *Runner) runSABR(ctx context.Context, id string, record *job.Record, tit
 	paths := artifact.Build(r.cfg.DataDir, id, title, selection.Container)
 	r.store.Resolve(id, title, resolvedOutput(selection, paths.Name))
 	return r.runSABRArtifact(ctx, id, paths, func() (int64, error) {
-		return r.downloadSABR(ctx, id, record, selection, paths.Output)
+		downloadMs, err := r.downloadSABR(ctx, id, record, selection, paths)
+		if err != nil {
+			return downloadMs, err
+		}
+		totalBytes := selection.Video.ContentLength + selection.Audio.ContentLength
+		r.store.Progress(id, job.Progress{Stage: "mux", DownloadedBytes: totalBytes, TotalBytes: totalBytes})
+		err = retry(ctx, 2, "mux", func() error {
+			_ = os.Remove(paths.Output)
+			return merge(ctx, r.cfg.Muxer, paths.Video, paths.Audio, paths.Output)
+		})
+		return downloadMs, err
 	})
 }
 
@@ -23,7 +33,7 @@ func (r *Runner) runSABRAudio(ctx context.Context, id string, record *job.Record
 	paths := artifact.Build(r.cfg.DataDir, id, title, selection.Container)
 	r.store.Resolve(id, title, audioResolvedOutput(selection, paths.Name))
 	return r.runSABRArtifact(ctx, id, paths, func() (int64, error) {
-		return r.downloadSABRAudio(ctx, id, record, selection, paths.Output)
+		return r.downloadSABRAudio(ctx, id, record, selection, paths)
 	})
 }
 
