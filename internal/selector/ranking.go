@@ -1,6 +1,10 @@
 package selector
 
-import "typetype-downloader-go/internal/typetype"
+import (
+	"strings"
+
+	"typetype-downloader-go/internal/typetype"
+)
 
 func playableVideo(stream typetype.VideoStreamItem) bool {
 	return stream.URL != "" || stream.DeliveryMethod == "sabr" && stream.ManifestURL != ""
@@ -33,4 +37,8 @@ func stringValue(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func codecMatches(codec string, prefix string) bool {
+	return codec == "" || strings.HasPrefix(codec, prefix)
 }

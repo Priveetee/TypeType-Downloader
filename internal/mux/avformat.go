@@ -23,8 +23,11 @@ static void tt_set_error(char** err, int code, const char* prefix) {
     *err = tt_strdup(buffer);
 }
 
-static int tt_open_input(AVFormatContext** ctx, const char* path, char** err) {
-    int ret = avformat_open_input(ctx, path, NULL, NULL);
+static int tt_open_input(AVFormatContext** ctx, const char* path, const char* headers, char** err) {
+	AVDictionary* opts = NULL;
+	if (headers && headers[0]) av_dict_set(&opts, "headers", headers, 0);
+	int ret = avformat_open_input(ctx, path, NULL, &opts);
+	av_dict_free(&opts);
     if (ret < 0) {
         tt_set_error(err, ret, "open input");
         return ret;
@@ -79,16 +82,16 @@ static int tt_copy_stream(AVFormatContext* output, AVStream* input_stream, AVStr
     return 0;
 }
 
-static int tt_remux_avformat(const char* video_path, const char* audio_path, const char* output_path, char** err) {
+static int tt_remux_avformat(const char* video_path, const char* video_headers, const char* audio_path, const char* audio_headers, const char* output_path, char** err) {
     AVFormatContext *video_input = NULL, *audio_input = NULL, *output = NULL;
     AVStream *video_out = NULL, *audio_out = NULL;
     AVPacket *video_packet = NULL, *audio_packet = NULL;
     int ret = 0;
     int video_ready = 0, audio_ready = 0;
 
-    ret = tt_open_input(&video_input, video_path, err);
-    if (ret < 0) goto cleanup;
-    ret = tt_open_input(&audio_input, audio_path, err);
+	ret = tt_open_input(&video_input, video_path, video_headers, err);
+	if (ret < 0) goto cleanup;
+	ret = tt_open_input(&audio_input, audio_path, audio_headers, err);
     if (ret < 0) goto cleanup;
 
     int video_index = av_find_best_stream(video_input, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
@@ -189,20 +192,28 @@ import (
 )
 
 func RemuxAVFormat(ctx context.Context, videoPath string, audioPath string, outputPath string) error {
+	return RemuxAVFormatWithHeaders(ctx, videoPath, "", audioPath, "", outputPath)
+}
+
+func RemuxAVFormatWithHeaders(ctx context.Context, videoPath string, videoHeaders string, audioPath string, audioHeaders string, outputPath string) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
 	cVideo := C.CString(videoPath)
+	cVideoHeaders := C.CString(videoHeaders)
 	cAudio := C.CString(audioPath)
+	cAudioHeaders := C.CString(audioHeaders)
 	cOutput := C.CString(outputPath)
 	defer C.free(unsafe.Pointer(cVideo))
+	defer C.free(unsafe.Pointer(cVideoHeaders))
 	defer C.free(unsafe.Pointer(cAudio))
+	defer C.free(unsafe.Pointer(cAudioHeaders))
 	defer C.free(unsafe.Pointer(cOutput))
 
 	var cErr *C.char
-	ret := C.tt_remux_avformat(cVideo, cAudio, cOutput, &cErr)
+	ret := C.tt_remux_avformat(cVideo, cVideoHeaders, cAudio, cAudioHeaders, cOutput, &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 	}

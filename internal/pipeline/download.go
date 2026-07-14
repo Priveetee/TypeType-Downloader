@@ -14,7 +14,10 @@ import (
 func (r *Runner) download(ctx context.Context, id string, selection *selector.Selection, paths artifact.Paths) (int64, error) {
 	started := time.Now()
 	total := selection.Video.ContentLength + selection.Audio.ContentLength
-	progress := combinedProgress(func(downloaded int64, speed int64) {
+	progress := combinedProgress(func(downloaded int64, probedTotal int64, speed int64) {
+		if probedTotal > 0 {
+			total = probedTotal
+		}
 		r.store.Progress(id, job.Progress{Stage: "download", DownloadedBytes: downloaded, TotalBytes: total, SpeedBytesPerSecond: speed})
 	})
 	options := downloader.Options{
@@ -39,7 +42,10 @@ func (r *Runner) download(ctx context.Context, id string, selection *selector.Se
 func (r *Runner) downloadAudio(ctx context.Context, id string, selection *selector.AudioSelection, paths artifact.Paths) (int64, error) {
 	started := time.Now()
 	total := selection.Audio.ContentLength
-	progress := combinedProgress(func(downloaded int64, speed int64) {
+	progress := combinedProgress(func(downloaded int64, probedTotal int64, speed int64) {
+		if probedTotal > 0 {
+			total = probedTotal
+		}
 		r.store.Progress(id, job.Progress{Stage: "download", DownloadedBytes: downloaded, TotalBytes: total, SpeedBytesPerSecond: speed})
 	})
 	options := downloader.Options{
@@ -54,23 +60,31 @@ func (r *Runner) downloadAudio(ctx context.Context, id string, selection *select
 	return time.Since(started).Milliseconds(), err
 }
 
-func combinedProgress(update func(downloaded int64, speed int64)) downloader.ProgressFunc {
+func combinedProgress(update func(downloaded int64, total int64, speed int64)) downloader.ProgressFunc {
 	var mu sync.Mutex
 	downloadedByName := map[string]int64{}
 	speedByName := map[string]int64{}
+	totalByName := map[string]int64{}
 	return func(progress downloader.Progress) {
 		mu.Lock()
 		defer mu.Unlock()
 		downloadedByName[progress.Name] = progress.Downloaded
 		speedByName[progress.Name] = int64(progress.Speed)
+		if progress.Total > 0 {
+			totalByName[progress.Name] = progress.Total
+		}
 		var downloaded int64
 		var speed int64
+		var total int64
 		for _, value := range downloadedByName {
 			downloaded += value
 		}
 		for _, value := range speedByName {
 			speed += value
 		}
-		update(downloaded, speed)
+		for _, value := range totalByName {
+			total += value
+		}
+		update(downloaded, total, speed)
 	}
 }

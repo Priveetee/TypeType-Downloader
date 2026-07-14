@@ -114,6 +114,9 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	if selection.Video.DeliveryMethod == "sabr" {
 		return r.runSABR(ctx, id, record, stream.Title, selection)
 	}
+	if usesRemoteMux(selection) {
+		return r.runRemoteMux(ctx, id, stream.Title, selection)
+	}
 	if selection.Video.ContentLength <= 0 || selection.Audio.ContentLength <= 0 {
 		return r.runRemote(ctx, id, stream.Title, selection)
 	}
@@ -134,6 +137,11 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	}
 	muxStarted := time.Now()
 	totalBytes := selection.Video.ContentLength + selection.Audio.ContentLength
+	if totalBytes <= 0 {
+		if current, ok := r.store.Get(id); ok {
+			totalBytes = current.Progress.TotalBytes
+		}
+	}
 	r.store.Progress(id, job.Progress{Stage: "mux", DownloadedBytes: totalBytes, TotalBytes: totalBytes})
 	if err := retry(ctx, 2, "mux", func() error {
 		_ = os.Remove(paths.Output)

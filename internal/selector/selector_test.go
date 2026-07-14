@@ -102,6 +102,25 @@ func TestSelectMP4WithOptionsRemuxesSABRVP9AndAACToMP4(t *testing.T) {
 	}
 }
 
+func TestSelectMP4WithOptionsAllowsUnknownSizeAndCodec(t *testing.T) {
+	mp4a := "mp4a"
+	stream := &typetype.StreamResponse{
+		VideoOnlyStreams: []typetype.VideoStreamItem{
+			{URL: "video.m3u8", MimeType: "video/mp4", Height: 360},
+		},
+		AudioStreams: []typetype.AudioStreamItem{
+			{URL: "audio.m3u8", MimeType: "audio/mp4", Codec: &mp4a},
+		},
+	}
+	selection, err := SelectMP4WithOptions(stream, Options{Container: "mp4", MaxHeight: 360})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selection.Video.URL != "video.m3u8" || selection.Audio.URL != "audio.m3u8" {
+		t.Fatalf("selection = %s+%s", selection.Video.URL, selection.Audio.URL)
+	}
+}
+
 func TestSelectAudioOnlyDefaultsToM4A(t *testing.T) {
 	mp4a := "mp4a.40.2"
 	opus := "opus"
