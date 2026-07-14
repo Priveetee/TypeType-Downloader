@@ -66,8 +66,8 @@ func (s *Store) RestorePending(records []*Record) []string {
 	return ids
 }
 
-func (s *Store) Create(rawURL string, options Options) (*Record, bool, bool, error) {
-	cacheKey, err := CacheKey(rawURL, options)
+func (s *Store) Create(rawURL string, options Options, authorization string) (*Record, bool, bool, error) {
+	cacheKey, err := CacheKey(rawURL, options, authorization)
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -85,7 +85,7 @@ func (s *Store) Create(rawURL string, options Options) (*Record, bool, bool, err
 	if err != nil {
 		return nil, false, false, err
 	}
-	record := &Record{ID: id, CacheKey: cacheKey, URL: rawURL, Options: options, Status: StatusQueued, QueuedAt: time.Now()}
+	record := &Record{ID: id, CacheKey: cacheKey, URL: rawURL, Authorization: authorization, Options: options, Status: StatusQueued, QueuedAt: time.Now()}
 	s.mu.Lock()
 	s.jobs[id] = record
 	s.cache[cacheKey] = id

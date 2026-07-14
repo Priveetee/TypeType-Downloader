@@ -9,9 +9,13 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+concurrency:
+  group: coverage-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   coverage:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, arko, downloader]
     permissions:
       contents: read
     steps:
@@ -20,9 +24,12 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: false
 
-      - name: Install libavformat headers
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libavformat-dev libavcodec-dev libavutil-dev
+      - name: Isolate Go caches
+        run: |
+          echo "GOCACHE=$RUNNER_TEMP/go-build" >> "$GITHUB_ENV"
+          echo "GOMODCACHE=$RUNNER_TEMP/go-mod" >> "$GITHUB_ENV"
 
       - name: Run coverage
         run: go test ./... -coverprofile=coverage.out

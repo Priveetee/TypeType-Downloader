@@ -58,6 +58,50 @@ func TestSelectMP4WithOptionsHonorsExplicitItags(t *testing.T) {
 	}
 }
 
+func TestSelectMP4WithOptionsAcceptsSABRManifest(t *testing.T) {
+	avc := "avc1.640028"
+	mp4a := "mp4a.40.2"
+	stream := &typetype.StreamResponse{
+		VideoOnlyStreams: []typetype.VideoStreamItem{{
+			MimeType: "video/mp4", Codec: &avc, Itag: 137, Height: 1080,
+			DeliveryMethod: "sabr", ManifestURL: "/sabr/manifest/video-id",
+		}},
+		AudioStreams: []typetype.AudioStreamItem{{
+			MimeType: "audio/mp4", Codec: &mp4a, Itag: 140,
+			DeliveryMethod: "sabr", ManifestURL: "/sabr/manifest/video-id",
+		}},
+	}
+	selection, err := SelectMP4WithOptions(stream, Options{Container: "mp4", MaxHeight: 1080})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selection.Video.Itag != 137 || selection.Audio.Itag != 140 {
+		t.Fatalf("selection = %d+%d, want 137+140", selection.Video.Itag, selection.Audio.Itag)
+	}
+}
+
+func TestSelectMP4WithOptionsRemuxesSABRVP9AndAACToMP4(t *testing.T) {
+	vp9 := "vp9"
+	mp4a := "mp4a.40.2"
+	stream := &typetype.StreamResponse{
+		VideoOnlyStreams: []typetype.VideoStreamItem{{
+			MimeType: "video/webm", Codec: &vp9, Itag: 308, Height: 1440,
+			DeliveryMethod: "sabr", ManifestURL: "/sabr/manifest/video-id",
+		}},
+		AudioStreams: []typetype.AudioStreamItem{{
+			MimeType: "audio/mp4", Codec: &mp4a, Itag: 140,
+			DeliveryMethod: "sabr", ManifestURL: "/sabr/manifest/video-id",
+		}},
+	}
+	selection, err := SelectMP4WithOptions(stream, Options{Container: "webm", MaxHeight: 1440})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selection.Video.Itag != 308 || selection.Audio.Itag != 140 || selection.Container != "mp4" {
+		t.Fatalf("selection = %d+%d/%s, want 308+140/mp4", selection.Video.Itag, selection.Audio.Itag, selection.Container)
+	}
+}
+
 func TestSelectMP4WithOptionsAllowsUnknownSizeAndCodec(t *testing.T) {
 	mp4a := "mp4a"
 	stream := &typetype.StreamResponse{
@@ -111,5 +155,19 @@ func TestSelectAudioOnlyCanSelectWebMOpus(t *testing.T) {
 	}
 	if selection.Container != "webm" || selection.Audio.Itag != 251 {
 		t.Fatalf("selection = %s/%d, want webm/251", selection.Container, selection.Audio.Itag)
+	}
+}
+
+func TestSelectMP4WithOptionsAcceptsUnknownRemoteMetadata(t *testing.T) {
+	stream := &typetype.StreamResponse{
+		VideoOnlyStreams: []typetype.VideoStreamItem{{URL: "video.m3u8", MimeType: "video/mp4", Itag: -1}},
+		AudioStreams:     []typetype.AudioStreamItem{{URL: "audio.m3u8", MimeType: "audio/mp4", Itag: -1}},
+	}
+	selection, err := SelectMP4WithOptions(stream, Options{Container: "mp4"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selection.Video.URL != "video.m3u8" || selection.Audio.URL != "audio.m3u8" {
+		t.Fatalf("selection = %s + %s", selection.Video.URL, selection.Audio.URL)
 	}
 }

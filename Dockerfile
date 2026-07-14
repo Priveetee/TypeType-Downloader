@@ -1,5 +1,8 @@
 FROM golang:1.26-trixie AS build
 
+ARG BUILD_VERSION=0.1.0
+ARG BUILD_REVISION=development
+ARG BUILD_TIME=unknown
 WORKDIR /src
 RUN apt-get update \
     && apt-get install -y --no-install-recommends pkg-config libavformat-dev libavcodec-dev libavutil-dev \
@@ -9,12 +12,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/typetype-downloader-go ./cmd/server
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w -X typetype-downloader-go/internal/buildinfo.Version=$BUILD_VERSION -X typetype-downloader-go/internal/buildinfo.Revision=$BUILD_REVISION -X typetype-downloader-go/internal/buildinfo.BuildTime=$BUILD_TIME" -o /out/typetype-downloader-go ./cmd/server
 
 FROM debian:trixie-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libavformat61 libavcodec61 libavutil59 \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg libavformat61 libavcodec61 libavutil59 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --system --create-home --home-dir /app typetype

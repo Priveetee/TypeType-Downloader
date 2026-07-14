@@ -10,9 +10,9 @@ import (
 	"time"
 )
 
-func Start(ctx context.Context, dataDir string) {
+func Start(ctx context.Context, dataDir string, storageBackend string) {
 	go func() {
-		clean(dataDir, time.Hour)
+		clean(dataDir, storageBackend, time.Hour)
 		ticker := time.NewTicker(30 * time.Minute)
 		defer ticker.Stop()
 		for {
@@ -20,15 +20,21 @@ func Start(ctx context.Context, dataDir string) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				clean(dataDir, time.Hour)
+				clean(dataDir, storageBackend, time.Hour)
 			}
 		}
 	}()
 }
 
-func clean(dataDir string, maxAge time.Duration) {
-	jobsDir := filepath.Join(dataDir, "jobs")
+func clean(dataDir string, storageBackend string, maxAge time.Duration) {
 	cutoff := time.Now().Add(-maxAge)
+	cleanJobs(filepath.Join(dataDir, "jobs"), cutoff)
+	if storageBackend == "s3" {
+		cleanArtifacts(filepath.Join(dataDir, "artifacts"), cutoff)
+	}
+}
+
+func cleanJobs(jobsDir string, cutoff time.Time) {
 	_ = filepath.WalkDir(jobsDir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return nil
@@ -44,4 +50,23 @@ func clean(dataDir string, maxAge time.Duration) {
 		}
 		return nil
 	})
+}
+
+func cleanArtifacts(artifactsDir string, cutoff time.Time) {
+	_ = filepath.WalkDir(artifactsDir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err == nil && info.ModTime().Before(cutoff) {
+			remove(path)
+		}
+		return nil
+	})
+}
+
+func remove(path string) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		slog.Warn("cleanup failed", "path", path, "error", err)
+	}
 }

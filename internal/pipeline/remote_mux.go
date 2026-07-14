@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,7 +17,18 @@ import (
 	"typetype-downloader-go/internal/selector"
 )
 
-func (r *Runner) runRemoteMux(ctx context.Context, id string, selection *selector.Selection, paths artifact.Paths, started time.Time) error {
+func (r *Runner) runRemoteMux(ctx context.Context, id string, title string, selection *selector.Selection) error {
+	started := time.Now()
+	paths := artifact.Build(r.cfg.DataDir, id, title, selection.Container)
+	preserveOutput := false
+	defer func() { cleanupWork(paths, preserveOutput) }()
+	r.store.Resolve(id, title, resolvedOutput(selection, paths.Name))
+	if err := os.MkdirAll(paths.WorkDir, 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(paths.Output), 0o755); err != nil {
+		return err
+	}
 	muxStarted := time.Now()
 	r.store.Progress(id, job.Progress{Stage: "mux"})
 	if err := retry(ctx, 2, "mux", func() error {
@@ -40,9 +52,7 @@ func (r *Runner) runRemoteMux(ctx context.Context, id string, selection *selecto
 		expires = &expiresAt
 	}
 	r.store.Done(id, saved.Location, saved.Backend, expires, 0, muxMs)
-	if saved.Backend != "local" {
-		_ = os.Remove(paths.Output)
-	}
+	preserveOutput = saved.Backend == "local"
 	slog.Info("remote mux job completed", "id", id, "ms", time.Since(started).Milliseconds())
 	return nil
 }

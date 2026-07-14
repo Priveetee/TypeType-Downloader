@@ -17,6 +17,7 @@ import (
 	"typetype-downloader-go/internal/db"
 	"typetype-downloader-go/internal/job"
 	"typetype-downloader-go/internal/pipeline"
+	"typetype-downloader-go/internal/storage"
 )
 
 func main() {
@@ -39,8 +40,13 @@ func main() {
 	store.Restore(restored)
 	pendingIDs := store.RestorePending(pending)
 	runner := pipeline.NewRunner(cfg, store, files)
+	disk, err := storage.NewMonitor(cfg.DataDir, cfg.MinFreeBytes, cfg.MinFreePercent)
+	if err != nil {
+		slog.Error("storage monitor failed", "error", err)
+		os.Exit(1)
+	}
 	runner.Start(ctx)
-	cleanup.Start(ctx, cfg.DataDir)
+	cleanup.Start(ctx, cfg.DataDir, cfg.StorageBackend)
 	for _, id := range pendingIDs {
 		if err := runner.EnqueueBlocking(ctx, id); err != nil {
 			slog.Warn("failed to restore queued job", "id", id, "error", err)
@@ -48,7 +54,7 @@ func main() {
 	}
 
 	health = append(health, files)
-	handler := api.NewServer(store, runner, files, health...).Routes()
+	handler := api.NewServer(store, runner, files, disk, health...).Routes()
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()

@@ -7,14 +7,17 @@ import (
 	"time"
 
 	"typetype-downloader-go/internal/artifact"
+	"typetype-downloader-go/internal/buildinfo"
 	"typetype-downloader-go/internal/job"
 	"typetype-downloader-go/internal/pipeline"
+	"typetype-downloader-go/internal/storage"
 )
 
 type Server struct {
 	store  *job.Store
 	runner *pipeline.Runner
 	files  artifact.Store
+	disk   *storage.Monitor
 	checks []HealthCheck
 }
 
@@ -23,17 +26,26 @@ type HealthCheck interface {
 	Health(context.Context) error
 }
 
-func NewServer(store *job.Store, runner *pipeline.Runner, files artifact.Store, health ...HealthCheck) *Server {
-	return &Server{store: store, runner: runner, files: files, checks: health}
+func NewServer(store *job.Store, runner *pipeline.Runner, files artifact.Store, disk *storage.Monitor, health ...HealthCheck) *Server {
+	return &Server{store: store, runner: runner, files: files, disk: disk, checks: health}
 }
 
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.health)
 	mux.HandleFunc("/health/deep", s.healthDeep)
+	mux.HandleFunc("/version", s.version)
 	mux.HandleFunc("/jobs", s.jobs)
 	mux.HandleFunc("/jobs/", s.jobByID)
 	return mux
+}
+
+func (s *Server) version(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"service": "downloader", "version": buildinfo.Version,
+		"revision": buildinfo.Revision, "shortRevision": buildinfo.ShortRevision(),
+		"buildTime": buildinfo.BuildTime,
+	})
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
@@ -52,6 +64,12 @@ func (s *Server) healthDeep(w http.ResponseWriter, r *http.Request) {
 		} else {
 			checks[check.Name()] = "ok"
 		}
+	}
+	if err := s.disk.Health(); err != nil {
+		checks[s.disk.Name()] = err.Error()
+		status = http.StatusServiceUnavailable
+	} else {
+		checks[s.disk.Name()] = "ok"
 	}
 	writeJSON(w, status, map[string]any{"status": statusText(status), "checks": checks})
 }

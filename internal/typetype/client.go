@@ -25,15 +25,18 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-func (c *Client) FetchStream(ctx context.Context, rawURL string) (*StreamResponse, error) {
+func (c *Client) FetchStream(ctx context.Context, rawURL string, authorization string) (*StreamResponse, error) {
 	resolved, err := NormalizeWatchURL(rawURL)
 	if err != nil {
 		return nil, err
 	}
-	endpoint := c.baseURL + "/streams?url=" + url.QueryEscape(resolved)
+	endpoint := c.streamEndpoint(resolved)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
+	}
+	if authorization = strings.TrimSpace(authorization); authorization != "" {
+		req.Header.Set("Authorization", authorization)
 	}
 	res, err := c.http.Do(req)
 	if err != nil {
@@ -50,6 +53,50 @@ func (c *Client) FetchStream(ctx context.Context, rawURL string) (*StreamRespons
 	}
 	c.normalizeStreamURLs(&stream)
 	return &stream, nil
+}
+
+func (c *Client) streamEndpoint(rawURL string) string {
+	path := "/streams"
+	parsed, err := url.Parse(rawURL)
+	if err == nil && isYouTubeHost(parsed.Hostname()) {
+		path = "/streams/youtube/sabr"
+	}
+	return c.baseURL + path + "?url=" + url.QueryEscape(rawURL)
+}
+
+func isYouTubeHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	return host == "youtu.be" || host == "youtube.com" || strings.HasSuffix(host, ".youtube.com") ||
+		host == "youtube-nocookie.com" || strings.HasSuffix(host, ".youtube-nocookie.com")
+}
+
+func (c *Client) MediaURL(path string) string {
+	trimmed := strings.TrimSpace(path)
+	if strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://") {
+		return trimmed
+	}
+	return c.baseURL + "/" + strings.TrimLeft(trimmed, "/")
+}
+
+func (c *Client) ProxyMediaURL(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" || c.isAPIURL(rawURL) {
+		return rawURL
+	}
+	path := "/proxy"
+	if parsed, err := url.Parse(rawURL); err == nil && strings.Contains(parsed.Host, "nicovideo.jp") {
+		path = "/proxy/nicovideo"
+	}
+	return c.baseURL + path + "?url=" + url.QueryEscape(rawURL)
+}
+
+func (c *Client) isAPIURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || !parsed.IsAbs() {
+		return false
+	}
+	base, err := url.Parse(c.baseURL)
+	return err == nil && parsed.Scheme == base.Scheme && parsed.Host == base.Host
 }
 
 func (c *Client) normalizeStreamURLs(stream *StreamResponse) {

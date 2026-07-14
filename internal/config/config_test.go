@@ -16,6 +16,8 @@ func TestLoadReadsStorageAndDatabaseConfig(t *testing.T) {
 	t.Setenv("S3_ACCESS_KEY", "key")
 	t.Setenv("S3_SECRET_KEY", "secret")
 	t.Setenv("S3_ARTIFACT_TTL_SECONDS", "7200")
+	t.Setenv("STORAGE_MIN_FREE_BYTES", "123456")
+	t.Setenv("STORAGE_MIN_FREE_PERCENT", "25")
 	cfg := Load()
 	if cfg.HTTPAddr != ":18093" || cfg.StorageBackend != "s3" || cfg.S3UseSSL {
 		t.Fatalf("unexpected config: %#v", cfg)
@@ -31,5 +33,8 @@ func TestLoadReadsStorageAndDatabaseConfig(t *testing.T) {
 	}
 	if cfg.S3PublicUseSSL {
 		t.Fatalf("unexpected public S3 SSL config: %#v", cfg)
+	}
+	if cfg.MinFreeBytes != 123456 || cfg.MinFreePercent != 25 {
+		t.Fatalf("unexpected disk config: %#v", cfg)
 	}
 }

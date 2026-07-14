@@ -81,13 +81,17 @@ func (r *Runner) process(parent context.Context, id string) {
 	r.store.Start(id, cancel)
 	defer cancel()
 	if err := r.run(ctx, id, record); err != nil {
-		code := "download_failed"
-		if errors.Is(err, context.Canceled) {
-			code = "cancelled"
-		}
+		code := failureCode(ctx, err)
 		r.store.Fail(id, code, err)
 		slog.Warn("job failed", "id", id, "error", err)
 	}
+}
+
+func failureCode(ctx context.Context, err error) string {
+	if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+		return "cancelled"
+	}
+	return "download_failed"
 }
 
 func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
@@ -95,7 +99,7 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	var stream *typetype.StreamResponse
 	if err := retry(ctx, 3, "stream extraction", func() error {
 		var fetchErr error
-		stream, fetchErr = r.streams.FetchStream(ctx, record.URL)
+		stream, fetchErr = r.streams.FetchStream(ctx, record.URL, record.Authorization)
 		return fetchErr
 	}); err != nil {
 		return err
@@ -107,7 +111,18 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	if err != nil {
 		return err
 	}
+	if selection.Video.DeliveryMethod == "sabr" {
+		return r.runSABR(ctx, id, record, stream.Title, selection)
+	}
+	if usesRemoteMux(selection) {
+		return r.runRemoteMux(ctx, id, stream.Title, selection)
+	}
+	if selection.Video.ContentLength <= 0 || selection.Audio.ContentLength <= 0 {
+		return r.runRemote(ctx, id, stream.Title, selection)
+	}
 	paths := artifact.Build(r.cfg.DataDir, id, stream.Title, selection.Container)
+	preserveOutput := false
+	defer func() { cleanupWork(paths, preserveOutput) }()
 	resolved := resolvedOutput(selection, paths.Name)
 	r.store.Resolve(id, stream.Title, resolved)
 	if err := os.MkdirAll(paths.WorkDir, 0o755); err != nil {
@@ -115,9 +130,6 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	}
 	if err := os.MkdirAll(filepath.Dir(paths.Output), 0o755); err != nil {
 		return err
-	}
-	if usesRemoteMux(selection) {
-		return r.runRemoteMux(ctx, id, selection, paths, started)
 	}
 	downloadMs, err := r.download(ctx, id, selection, paths)
 	if err != nil {
@@ -152,11 +164,7 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 		expires = &expiresAt
 	}
 	r.store.Done(id, saved.Location, saved.Backend, expires, downloadMs, muxMs)
-	if saved.Backend != "local" {
-		_ = os.Remove(paths.Output)
-	}
-	_ = os.Remove(paths.Video)
-	_ = os.Remove(paths.Audio)
+	preserveOutput = saved.Backend == "local"
 	slog.Info("job completed", "id", id, "ms", time.Since(started).Milliseconds())
 	return nil
 }
@@ -166,7 +174,15 @@ func (r *Runner) runAudioOnly(ctx context.Context, id string, record *job.Record
 	if err != nil {
 		return err
 	}
+	if selection.Audio.DeliveryMethod == "sabr" {
+		return r.runSABRAudio(ctx, id, record, stream.Title, selection)
+	}
+	if selection.Audio.ContentLength <= 0 {
+		return r.runRemoteAudio(ctx, id, stream.Title, selection)
+	}
 	paths := artifact.Build(r.cfg.DataDir, id, stream.Title, selection.Container)
+	preserveOutput := false
+	defer func() { cleanupWork(paths, preserveOutput) }()
 	resolved := audioResolvedOutput(selection, paths.Name)
 	r.store.Resolve(id, stream.Title, resolved)
 	if err := os.MkdirAll(paths.WorkDir, 0o755); err != nil {
@@ -193,9 +209,7 @@ func (r *Runner) runAudioOnly(ctx context.Context, id string, record *job.Record
 		expires = &expiresAt
 	}
 	r.store.Done(id, saved.Location, saved.Backend, expires, downloadMs, 0)
-	if saved.Backend != "local" {
-		_ = os.Remove(paths.Output)
-	}
+	preserveOutput = saved.Backend == "local"
 	slog.Info("audio job completed", "id", id, "ms", time.Since(started).Milliseconds())
 	return nil
 }
