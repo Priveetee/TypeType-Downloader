@@ -32,6 +32,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Isolate Docker credentials
+        run: echo "DOCKER_CONFIG=$RUNNER_TEMP/docker-config" >> "$GITHUB_ENV"
+
       - name: Resolve build metadata
         id: build-info
         run: |
