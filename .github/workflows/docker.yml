@@ -11,8 +11,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-  IMAGE_NAME_BETA: ${{ github.repository }}-beta
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
@@ -25,6 +23,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      image: ${{ steps.build-info.outputs.image }}
+      version: ${{ steps.build-info.outputs.version }}
 
     steps:
       - name: Checkout
@@ -40,6 +42,12 @@ jobs:
             channel="${GITHUB_REF_NAME//[^0-9A-Za-z-]/-}"
             version="$base_version-$channel.$GITHUB_RUN_NUMBER"
           fi
+          if [[ "$GITHUB_REF_NAME" == "dev" ]]; then
+            image="${REGISTRY}/${GITHUB_REPOSITORY,,}-beta"
+          else
+            image="${REGISTRY}/${GITHUB_REPOSITORY,,}"
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "build-time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
 
@@ -54,9 +62,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: |
-            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},enable=${{ github.ref_name == 'main' || startsWith(github.ref, 'refs/tags/v') }}
-            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BETA }},enable=${{ github.ref_name == 'dev' }}
+          images: ${{ steps.build-info.outputs.image }}
           tags: |
             type=sha,prefix=sha-,format=short
             type=ref,event=branch
@@ -77,6 +83,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -93,53 +100,35 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Verify published FFmpeg runtime
+        env:
+          IMAGE: ${{ steps.build-info.outputs.image }}
         run: |
-          repository="${GITHUB_REPOSITORY,,}"
-          suffix=""
-          if [ "$GITHUB_REF_NAME" = "dev" ]; then suffix="-beta"; fi
-          image="$REGISTRY/$repository$suffix:sha-${GITHUB_SHA::7}"
+          image="$IMAGE:sha-${GITHUB_SHA::7}"
           docker pull "$image"
           docker run --rm --entrypoint ffmpeg "$image" -version
 
-  deploy-beta:
+  notify-orchestrator:
     needs: build-and-push
-    if: github.ref_name == 'dev'
+    if: github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: [self-hosted, Linux, X64, arko, downloader]
-    environment: beta
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ secrets.TYPETYPE_ORCHESTRATOR_TOKEN }}
     steps:
-      - name: Check deployment configuration
-        id: deploy-config
+      - name: Send image digest
         env:
-          TYPE_TYPE_DEPLOY_HOST: ${{ secrets.TYPE_TYPE_DEPLOY_HOST }}
-          TYPE_TYPE_DEPLOY_PORT: ${{ secrets.TYPE_TYPE_DEPLOY_PORT }}
-          TYPE_TYPE_DEPLOY_USER: ${{ secrets.TYPE_TYPE_DEPLOY_USER }}
-          TYPE_TYPE_DEPLOY_SSH_KEY: ${{ secrets.TYPE_TYPE_DEPLOY_SSH_KEY }}
+          DIGEST: ${{ needs.build-and-push.outputs.digest }}
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
+          VERSION: ${{ needs.build-and-push.outputs.version }}
         run: |
-          if [ -z "$TYPE_TYPE_DEPLOY_HOST" ] || [ -z "$TYPE_TYPE_DEPLOY_PORT" ] || [ -z "$TYPE_TYPE_DEPLOY_USER" ] || [ -z "$TYPE_TYPE_DEPLOY_SSH_KEY" ]; then
-            echo "Deployment secrets are not configured; skipping deployment."
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "configured=true" >> "$GITHUB_OUTPUT"
-
-      - name: Configure SSH
-        if: steps.deploy-config.outputs.configured == 'true'
-        env:
-          TYPE_TYPE_DEPLOY_HOST: ${{ secrets.TYPE_TYPE_DEPLOY_HOST }}
-          TYPE_TYPE_DEPLOY_PORT: ${{ secrets.TYPE_TYPE_DEPLOY_PORT }}
-          TYPE_TYPE_DEPLOY_SSH_KEY: ${{ secrets.TYPE_TYPE_DEPLOY_SSH_KEY }}
-        run: |
-          install -m 700 -d ~/.ssh
-          install -m 600 /dev/null ~/.ssh/typetype_deploy_key
-          printf '%s\n' "$TYPE_TYPE_DEPLOY_SSH_KEY" > ~/.ssh/typetype_deploy_key
-          ssh-keyscan -p "$TYPE_TYPE_DEPLOY_PORT" "$TYPE_TYPE_DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: Deploy beta stack
-        if: steps.deploy-config.outputs.configured == 'true'
-        env:
-          TYPE_TYPE_DEPLOY_HOST: ${{ secrets.TYPE_TYPE_DEPLOY_HOST }}
-          TYPE_TYPE_DEPLOY_PORT: ${{ secrets.TYPE_TYPE_DEPLOY_PORT }}
-          TYPE_TYPE_DEPLOY_USER: ${{ secrets.TYPE_TYPE_DEPLOY_USER }}
-        run: |
-          ssh -i ~/.ssh/typetype_deploy_key -p "$TYPE_TYPE_DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$TYPE_TYPE_DEPLOY_USER@$TYPE_TYPE_DEPLOY_HOST" "/usr/local/sbin/typetype-beta-update"
-          curl --fail --silent --show-error https://beta.typetype.video/api/health
+          if [[ "$GITHUB_REF_NAME" == "dev" ]]; then channel="beta"; else channel="stable"; fi
+          jq -n \
+            --arg channel "$channel" \
+            --arg component "downloader" \
+            --arg digest "$DIGEST" \
+            --arg image "$IMAGE" \
+            --arg revision "$GITHUB_SHA" \
+            --arg version "$VERSION" \
+            '{event_type:"component-image",client_payload:{channel:$channel,component:$component,digest:$digest,image:$image,revision:$revision,version:$version}}' \
+            | gh api --method POST repos/TypeType-Video/TypeType/dispatches --input -
