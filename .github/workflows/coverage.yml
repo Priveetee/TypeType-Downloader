@@ -26,6 +26,12 @@ jobs:
           go-version-file: go.mod
           cache: false
 
+      - name: Install FFmpeg development libraries
+        if: github.event_name == 'pull_request'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libavformat-dev libavcodec-dev libavutil-dev
+
       - name: Isolate Go caches
         run: |
           echo "GOCACHE=$RUNNER_TEMP/go-build" >> "$GITHUB_ENV"
