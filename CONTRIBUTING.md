@@ -22,17 +22,24 @@ go test ./...
 
 The provided Compose stack starts PostgreSQL, Dragonfly, Garage, and the downloader for integration work.
 
-## Implementation expectations
+## Programming preferences
 
+- Use Go for production implementation and follow standard Go naming and package conventions.
+- Prefer the standard library, adding a dependency only when it materially improves the result.
+- Prefer clear names and structure over explanatory comments, but comments are welcome whenever a contributor finds them useful.
+- Keep files under 160 lines where practical and split them before they become difficult to reason about.
 - Keep extraction in TypeType-Server.
 - Keep HTTP handlers thin and put behavior in the owning package.
 - Pass `context.Context` through jobs, workers, downloads, storage, and muxing.
 - Preserve cancellation and cleanup on every failure path.
 - Use typed errors when API behavior depends on the failure class.
 - Avoid global mutable state.
+- Do not reintroduce yt-dlp.
 - Keep stream-copy muxing as the default; do not introduce transcoding without prior discussion.
 - Add tests for job lifecycle, retries, cancellation, storage, progress, and failure classification.
 - Keep generated media, local databases, credentials, and test artifacts out of Git.
+- Keep benchmarks and proof-of-concept code out of production paths unless they are behind explicit flags.
+- Verify GPL-3.0-or-later compatibility before adding a dependency.
 - Coordinate any API contract change with TypeType-Server.
 
 ## Required checks
