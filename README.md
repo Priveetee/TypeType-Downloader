@@ -1,120 +1,87 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/TypeType-Video/TypeType/main/assets/banner.svg" alt="TypeType" width="100%">
-  <h1>TypeType-Downloader</h1>
-  <p>Native Go download backend for TypeType.</p>
+  <h1>TypeType Downloader</h1>
+  <p>The native download and muxing service for TypeType.</p>
 </div>
 
-<div align="center">
+TypeType-Downloader receives jobs from [TypeType-Server](https://github.com/TypeType-Video/TypeType-Server), downloads the selected media streams, muxes audio and video without re-encoding, and publishes the finished artifact through local or S3-compatible storage.
 
-[![Downloader](https://img.shields.io/badge/downloader-Go-00add8)](https://go.dev)
-[![Muxer](https://img.shields.io/badge/muxer-libavformat-5cb85c)](https://ffmpeg.org)
-[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+Extraction stays in TypeType-Server. If you want to install or update a complete instance, use the [central TypeType stack](https://github.com/TypeType-Video/TypeType).
 
-</div>
+## Responsibilities
 
-TypeType-Downloader receives jobs from TypeType-Server, downloads direct media streams, muxes audio and video, and exposes finished artifacts through local storage or S3-compatible storage. Extraction stays in TypeType-Server.
+- Persistent asynchronous download jobs
+- Concurrent HTTP Range downloads and progress aggregation
+- TypeType SABR segment downloads
+- Audio and video stream-copy muxing through libavformat
+- SSE job updates with polling-compatible state
+- Cancellation, cleanup, and storage-capacity safeguards
+- Local filesystem and S3/Garage artifact storage
 
-## What this is
+## Job API
 
-A production Go service for video and audio downloads in the TypeType stack.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Basic service health |
+| `GET` | `/health/deep` | Dependency and storage health |
+| `POST` | `/jobs` | Create a download job |
+| `GET` | `/jobs/{id}` | Read job state and progress |
+| `GET` | `/jobs/{id}/events` | Stream job updates through SSE |
+| `GET` | `/jobs/{id}/artifact` | Serve or redirect to the artifact |
+| `POST` | `/jobs/{id}/cancel` | Cancel a queued or running job |
+| `DELETE` | `/jobs/{id}` | Delete a non-running job and its artifact |
 
-It provides async jobs, progress metadata, SSE events, parallel HTTP Range downloads, stream-copy muxing, Postgres persistence, Dragonfly cache state, and Garage/S3 artifact storage.
-
-## What this is not
-
-- Not an extractor.
-- Not a frontend service.
-- Not a yt-dlp wrapper.
-- Not a public media proxy for arbitrary URLs.
+Jobs use `queued`, `running`, `done`, and `failed` as their stable lifecycle states. TypeType-Server exposes the authenticated user-facing gateway for this API.
 
 ## Stack
 
-| Role | Tool |
-|---|---|
-| Language | Go |
+| Role | Technology |
+| --- | --- |
+| Language | Go 1.26 |
 | HTTP API | Go standard library |
-| Downloads | Parallel HTTP Range requests |
 | Muxing | libavformat through cgo |
-| Storage | Local filesystem or S3/Garage |
 | Persistence | PostgreSQL |
-| Cache | Dragonfly |
-| Runtime image | Wolfi-based Docker image |
-
-## API
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Basic health check |
-| `GET` | `/health/deep` | Service, Postgres, Dragonfly, and S3 health |
-| `POST` | `/jobs` | Create a download job |
-| `GET` | `/jobs/{id}` | Read job status |
-| `GET` | `/jobs/{id}/events` | Stream job updates as SSE |
-| `GET` | `/jobs/{id}/artifact` | Download or redirect to artifact |
-| `POST` | `/jobs/{id}/cancel` | Cancel queued or running job |
-| `DELETE` | `/jobs/{id}` | Delete a non-running job and artifact |
-
-## Job model
-
-| Field | Meaning |
-|---|---|
-| `status` | Stable lifecycle: `queued`, `running`, `done`, `failed` |
-| `stage` | Operational phase: `extract`, `download`, `mux`, `done`, or last known phase |
-| `artifactUrl` | Relative gateway path when exposed through TypeType-Server |
-| `resolved` | Selected stream metadata and output filename |
-
-The terminal source of truth is `status`. Cancellation is represented as `status="failed"` with `errorCode="cancelled"`.
-
-## Configuration
-
-| Variable | Purpose |
-|---|---|
-| `HTTP_PORT` | HTTP port, default `18093` |
-| `PUBLIC_BASE_URL` | Public base URL used in job responses |
-| `TYPETYPE_API_BASE` | TypeType-Server base URL for `/streams` |
-| `DATABASE_URL` or `DB_URL` | Postgres connection |
-| `REDIS_HOST`, `REDIS_PORT` | Dragonfly connection |
-| `STORAGE_BACKEND` | `local` or `s3` |
-| `S3_ENDPOINT` | Internal S3/Garage endpoint |
-| `S3_PUBLIC_ENDPOINT` | Public endpoint used for presigned URLs |
-| `S3_BUCKET` | Artifact bucket |
-| `S3_ACCESS_KEY`, `S3_SECRET_KEY` | S3 credentials |
-| `MAX_CONCURRENT_WORKERS` | Concurrent jobs |
-| `DOWNLOAD_WORKERS` | Range workers per stream |
-| `DOWNLOAD_CHUNK_SIZE` | Range chunk size |
-| `MUXER` | `avformat` by default |
-
-## Storage
-
-| Mode | Behavior |
-|---|---|
-| `local` | Keeps artifacts under `DATA_DIR/artifacts/<job-id>/` |
-| `s3` | Uploads artifacts to S3/Garage and returns presigned redirects |
-
-`S3_ENDPOINT` is used inside the container. `S3_PUBLIC_ENDPOINT` is used for URLs returned to clients.
+| Cache | Dragonfly through the Redis protocol |
+| Storage | Local filesystem or S3-compatible Garage |
 
 ## Development
 
-```bash
+Requirements:
+
+- Go 1.26
+- A C toolchain
+- libavformat, libavcodec, and libavutil development libraries
+- Docker Engine and Docker Compose v2 for the local service stack
+
+```sh
 gofmt -w cmd internal
 go test ./...
 go build ./...
 ```
 
-Run the local Compose stack:
+Run the local Compose stack with development credentials:
 
-```bash
+```sh
 DB_PASSWORD=change-me \
 S3_ACCESS_KEY=change-me \
 S3_SECRET_KEY=change-me \
 docker compose up -d --build
 ```
 
-## Related projects
+## Project structure
 
-- [TypeType](https://github.com/TypeType-Video/TypeType) is the central stack and issue tracker.
-- [TypeType-Server](https://github.com/TypeType-Video/TypeType-Server) extracts stream metadata and gates the downloader API.
-- [TypeType-Frontend](https://github.com/TypeType-Video/TypeType-Frontend) consumes download jobs from the frontend.
+| Path | Responsibility |
+| --- | --- |
+| `cmd` | Service entry points |
+| `internal/api` and `internal/server` | HTTP routes and server lifecycle |
+| `internal/downloader` and `internal/sabr` | Direct and SABR media transfer |
+| `internal/selector` and `internal/pipeline` | Stream selection and job execution |
+| `internal/mux` and `internal/ffmpeg` | libavformat integration |
+| `internal/storage` and `internal/artifact` | Artifact persistence and delivery |
+| `internal/db`, `internal/job`, and `migrations` | Job persistence |
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Bug reports and feature requests belong in the [central issue tracker](https://github.com/TypeType-Video/TypeType/issues).
 
 ## License
 
-GPL-3.0-or-later. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for runtime notices.
+TypeType-Downloader is licensed under [GPL-3.0-or-later](LICENSE). Runtime notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
