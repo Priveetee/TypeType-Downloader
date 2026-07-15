@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Priveetee/TypeType/main/assets/banner.svg" alt="TypeType" width="100%">
+  <img src="https://raw.githubusercontent.com/TypeType-Video/TypeType/main/assets/banner.svg" alt="TypeType" width="100%">
   <h1>TypeType-Downloader</h1>
   <p>Native Go download backend for TypeType.</p>
 </div>
@@ -111,9 +111,9 @@ docker compose up -d --build
 
 ## Related projects
 
-- [TypeType](https://github.com/Priveetee/TypeType) is the deployment stack.
-- [TypeType-Server](https://github.com/Priveetee/TypeType-Server) extracts stream metadata and gates the downloader API.
-- [TypeType web](https://github.com/Priveetee/TypeType) consumes download jobs from the frontend.
+- [TypeType](https://github.com/TypeType-Video/TypeType) is the central stack and issue tracker.
+- [TypeType-Server](https://github.com/TypeType-Video/TypeType-Server) extracts stream metadata and gates the downloader API.
+- [TypeType-Frontend](https://github.com/TypeType-Video/TypeType-Frontend) consumes download jobs from the frontend.
 
 ## License
 
