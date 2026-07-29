@@ -24,10 +24,9 @@ func (r *Runner) downloadSABR(ctx context.Context, id string, record *job.Record
 		VideoItag:     selection.Video.Itag,
 		AudioItag:     selection.Audio.Itag,
 		AudioTrackID:  trackID,
-		Workers:       r.cfg.DownloadWorkers,
-		WorkDir:       paths.WorkDir,
 		VideoPath:     paths.Video,
 		AudioPath:     paths.Audio,
+		ExpectedBytes: totalBytes,
 	}, r.sabrProgress(id, started, totalBytes))
 	return time.Since(started).Milliseconds(), err
 }
@@ -46,9 +45,8 @@ func (r *Runner) downloadSABRAudio(ctx context.Context, id string, record *job.R
 		AudioItag:     selection.Audio.Itag,
 		AudioTrackID:  trackID,
 		AudioOnly:     true,
-		Workers:       r.cfg.DownloadWorkers,
-		WorkDir:       paths.WorkDir,
 		AudioPath:     paths.Output,
+		ExpectedBytes: totalBytes,
 	}, r.sabrProgress(id, started, totalBytes))
 	return time.Since(started).Milliseconds(), err
 }
