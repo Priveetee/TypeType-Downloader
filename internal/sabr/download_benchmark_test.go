@@ -27,6 +27,14 @@ func BenchmarkDownloadAudioThirtyMinutesMultipart(b *testing.B) {
 	benchmarkDownload(b, true, 360, 4)
 }
 
+func BenchmarkDownloadVideoTenHours(b *testing.B) {
+	benchmarkDownload(b, false, 7200, 12)
+}
+
+func BenchmarkDownloadAudioTenHours(b *testing.B) {
+	benchmarkDownload(b, true, 7200, 4)
+}
+
 func benchmarkDownload(b *testing.B, audioOnly bool, segments int, parts int) {
 	streams := make([][]byte, parts)
 	totalBytes := int64(0)
