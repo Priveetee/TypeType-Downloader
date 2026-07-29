@@ -21,7 +21,9 @@ func TestVersionReturnsBuildMetadata(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body["revision"] != buildinfo.Revision || body["service"] != "downloader" {
+	if body["service"] != "downloader" ||
+		body["version"] != buildinfo.Version ||
+		body["revision"] != buildinfo.Revision {
 		t.Fatalf("body = %#v", body)
 	}
 }
