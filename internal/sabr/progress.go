@@ -2,34 +2,55 @@ package sabr
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type reporter struct {
-	mu         sync.Mutex
-	downloaded int64
-	last       time.Time
+	downloaded atomic.Int64
 	progress   ProgressFunc
+	reportMu   sync.Mutex
+	reported   int64
+	last       time.Time
 }
 
 func newReporter(progress ProgressFunc) *reporter {
-	return &reporter{last: time.Now(), progress: progress}
+	return &reporter{progress: progress, last: time.Now()}
+}
+
+func (r *reporter) beginAttempt() {
+	r.downloaded.Store(0)
+	r.reportMu.Lock()
+	r.last = time.Now()
+	r.reportMu.Unlock()
 }
 
 func (r *reporter) add(bytes int64) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.downloaded += bytes
-	if r.progress != nil && time.Since(r.last) >= 250*time.Millisecond {
-		r.last = time.Now()
-		r.progress(r.downloaded)
+	downloaded := r.downloaded.Add(bytes)
+	if r.progress == nil {
+		return
 	}
+	now := time.Now()
+	r.reportMu.Lock()
+	defer r.reportMu.Unlock()
+	if downloaded <= r.reported || now.Sub(r.last) < 250*time.Millisecond {
+		return
+	}
+	r.reported = downloaded
+	r.last = now
+	r.progress(downloaded)
 }
 
 func (r *reporter) finish() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.progress != nil {
-		r.progress(r.downloaded)
+	if r.progress == nil {
+		return
 	}
+	r.reportMu.Lock()
+	defer r.reportMu.Unlock()
+	downloaded := r.downloaded.Load()
+	if downloaded <= r.reported {
+		return
+	}
+	r.reported = downloaded
+	r.progress(downloaded)
 }
