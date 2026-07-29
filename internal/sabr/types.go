@@ -1,5 +1,7 @@
 package sabr
 
+import "os"
+
 type Options struct {
 	ManifestURL   string
 	Authorization string
@@ -23,4 +25,14 @@ type filePlan struct {
 type trackPlan struct {
 	Parts  []string
 	Target string
+}
+
+type streamTrack struct {
+	kind         string
+	itag         int
+	path         string
+	output       *os.File
+	nextSequence int
+	initialized  bool
+	mediaWritten bool
 }
