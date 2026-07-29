@@ -14,7 +14,7 @@ services:
       retries: 30
 
   dragonfly:
-    image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.38.0
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.39.0
     ports:
       - "56379:6379"
 
