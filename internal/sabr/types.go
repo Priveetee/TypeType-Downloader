@@ -9,23 +9,13 @@ type Options struct {
 	AudioItag     int
 	AudioTrackID  string
 	AudioOnly     bool
-	Workers       int
-	WorkDir       string
 	VideoPath     string
 	AudioPath     string
+	ExpectedBytes int64
+	Parts         int
 }
 
 type ProgressFunc func(downloadedBytes int64)
-
-type filePlan struct {
-	URL  string
-	Path string
-}
-
-type trackPlan struct {
-	Parts  []string
-	Target string
-}
 
 type streamTrack struct {
 	kind         string

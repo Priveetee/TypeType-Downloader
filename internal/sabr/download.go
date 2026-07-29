@@ -5,84 +5,78 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func Download(ctx context.Context, client *http.Client, options Options, progress ProgressFunc) error {
-	manifestURL, err := buildManifestURL(options)
-	if err != nil {
-		return err
-	}
-	tracks, err := fetchManifest(ctx, client, manifestURL, options.Authorization, options.AudioOnly)
-	if err != nil {
-		return err
-	}
-	tempDir, err := os.MkdirTemp(options.WorkDir, "sabr-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tempDir)
-	files, plans := planFiles(tracks, tempDir, options)
+	parts := downloadPartCount(options)
 	reporter := newReporter(progress)
-	if err := downloadFiles(ctx, client, files, options.Authorization, options.Workers, reporter); err != nil {
+	var last error
+	for attempt := 1; attempt <= downloadAttempts; attempt++ {
+		reporter.beginAttempt()
+		if err := downloadAttempt(ctx, client, options, parts, reporter); err == nil {
+			reporter.finish()
+			return nil
+		} else {
+			last = err
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if attempt < downloadAttempts {
+			if err := retryDelay(ctx, attempt); err != nil {
+				return err
+			}
+		}
+	}
+	return fmt.Errorf("SABR download failed after %d attempts: %w", downloadAttempts, last)
+}
+
+func downloadAttempt(
+	ctx context.Context,
+	client *http.Client,
+	options Options,
+	parts int,
+	progress *reporter,
+) error {
+	defer cleanupDownloadFiles(options, parts)
+	if err := downloadParts(ctx, client, options, parts, progress); err != nil {
 		return err
 	}
-	for _, plan := range plans {
-		if err := assemble(ctx, plan.Target, plan.Parts); err != nil {
-			return err
-		}
-	}
-	reporter.finish()
-	return nil
+	return assembleDownload(options, parts)
 }
 
-func fetchManifest(ctx context.Context, client *http.Client, rawURL string, authorization string, audioOnly bool) ([]Track, error) {
-	var last error
-	for attempt := 1; attempt <= 4; attempt++ {
-		response, err := request(ctx, client, rawURL, authorization)
-		if err == nil {
-			tracks, parseErr := parseManifest(response.Body, response.Request.URL, audioOnly)
-			response.Body.Close()
-			if parseErr != nil {
-				return nil, parseErr
-			}
-			return tracks, nil
-		}
-		last = err
-		if attempt < 4 {
-			if err := retryDelay(ctx, attempt); err != nil {
-				return nil, err
-			}
-		}
-	}
-	return nil, fmt.Errorf("fetch SABR manifest failed after 4 attempts: %w", last)
-}
-
-func buildManifestURL(options Options) (string, error) {
+func buildDownloadURL(options Options, part int, parts int) (string, error) {
 	parsed, err := url.Parse(options.ManifestURL)
 	if err != nil {
 		return "", err
 	}
 	query := parsed.Query()
-	query.Set("workload", "download")
 	query.Set("audioItag", strconv.Itoa(options.AudioItag))
 	if options.VideoItag > 0 {
 		query.Set("videoItag", strconv.Itoa(options.VideoItag))
 	}
+	parsed.Path = strings.Replace(parsed.Path, "/sabr/manifest/", "/sabr/download/", 1)
 	if options.AudioTrackID != "" {
 		query.Set("audioTrackId", options.AudioTrackID)
 	}
 	if options.AudioOnly {
 		query.Set("audioOnly", "true")
 	}
+	query.Set("part", strconv.Itoa(part))
+	query.Set("parts", strconv.Itoa(parts))
 	parsed.RawQuery = query.Encode()
 	return parsed.String(), nil
 }
 
-func request(ctx context.Context, client *http.Client, rawURL string, authorization string) (*http.Response, error) {
+func requestDownload(
+	ctx context.Context,
+	client *http.Client,
+	rawURL string,
+	authorization string,
+) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
@@ -98,36 +92,54 @@ func request(ctx context.Context, client *http.Client, rawURL string, authorizat
 		response.Body.Close()
 		return nil, fmt.Errorf("GET %s returned %s", req.URL.Path, response.Status)
 	}
+	if mediaType := strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]); mediaType != downloadMediaType {
+		response.Body.Close()
+		return nil, fmt.Errorf("GET %s returned unexpected content type %q", req.URL.Path, mediaType)
+	}
 	return response, nil
 }
 
-func planFiles(tracks []Track, tempDir string, options Options) ([]filePlan, []trackPlan) {
-	plans := make([]trackPlan, 0, len(tracks))
-	for trackIndex, track := range tracks {
-		target := options.AudioPath
-		if track.Kind == "video" {
-			target = options.VideoPath
+const downloadAttempts = 2
+
+func downloadPartCount(options Options) int {
+	if options.Parts > 0 {
+		if options.Parts > maxDownloadParts {
+			return maxDownloadParts
 		}
-		parts := make([]string, 0, len(track.URLs))
-		for partIndex := range track.URLs {
-			path := filepath.Join(tempDir, fmt.Sprintf("%d-%06d.part", trackIndex, partIndex))
-			parts = append(parts, path)
-		}
-		plans = append(plans, trackPlan{Parts: parts, Target: target})
+		return options.Parts
 	}
-	files := make([]filePlan, 0)
-	for partIndex := 0; ; partIndex++ {
-		added := false
-		for trackIndex, track := range tracks {
-			if partIndex >= len(track.URLs) {
-				continue
-			}
-			files = append(files, filePlan{URL: track.URLs[partIndex], Path: plans[trackIndex].Parts[partIndex]})
-			added = true
+	if options.AudioOnly {
+		if options.ExpectedBytes >= 16<<20 {
+			return 4
 		}
-		if !added {
-			break
+		if options.ExpectedBytes >= 4<<20 {
+			return 2
 		}
+		return 1
 	}
-	return files, plans
+	switch {
+	case options.ExpectedBytes >= 256<<20:
+		return 12
+	case options.ExpectedBytes >= 128<<20:
+		return 6
+	case options.ExpectedBytes >= 16<<20:
+		return 4
+	case options.ExpectedBytes >= 4<<20:
+		return 2
+	default:
+		return 1
+	}
 }
+
+func retryDelay(ctx context.Context, attempt int) error {
+	timer := time.NewTimer(time.Duration(attempt) * 100 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+const maxDownloadParts = 12
