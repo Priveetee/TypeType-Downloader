@@ -53,12 +53,17 @@ func downloadPart(
 	parts int,
 	progress *reporter,
 ) error {
+	partCtx, watchdog := newIdleWatchdog(ctx, options.IdleTimeout)
+	defer watchdog.stop()
 	rawURL, err := buildDownloadURL(options, part, parts)
 	if err != nil {
 		return err
 	}
-	response, err := requestDownload(ctx, client, rawURL, options.Authorization)
+	response, err := requestDownload(partCtx, client, rawURL, options.Authorization)
 	if err != nil {
+		if cause := context.Cause(partCtx); cause != nil {
+			err = cause
+		}
 		return fmt.Errorf("download SABR part %d/%d: %w", part+1, parts, err)
 	}
 	defer response.Body.Close()
@@ -67,7 +72,11 @@ func downloadPart(
 		return err
 	}
 	defer closeTracks(tracks)
-	if err := consumeDownloadStream(response.Body, tracks, progress, part == 0); err != nil {
+	reader := activityReader{reader: response.Body, touch: watchdog.touch}
+	if err := consumeDownloadStream(reader, tracks, progress, part == 0); err != nil {
+		if cause := context.Cause(partCtx); cause != nil {
+			err = cause
+		}
 		return fmt.Errorf("consume SABR part %d/%d: %w", part+1, parts, err)
 	}
 	return closeTracks(tracks)

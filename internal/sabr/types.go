@@ -1,6 +1,9 @@
 package sabr
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 type Options struct {
 	ManifestURL   string
@@ -13,6 +16,7 @@ type Options struct {
 	AudioPath     string
 	ExpectedBytes int64
 	Parts         int
+	IdleTimeout   time.Duration
 }
 
 type ProgressFunc func(downloadedBytes int64)
