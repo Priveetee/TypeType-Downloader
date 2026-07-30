@@ -3,13 +3,9 @@ package downloader
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"os"
-	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -37,31 +33,21 @@ type Progress struct {
 
 type ProgressFunc func(Progress)
 
-func DownloadFile(ctx context.Context, client *http.Client, source Source, output string, options Options, progress ProgressFunc) error {
+func DownloadFile(
+	ctx context.Context,
+	client *http.Client,
+	source Source,
+	output string,
+	options Options,
+	progress ProgressFunc,
+) error {
 	if source.URL == "" {
 		return fmt.Errorf("invalid source %s", source.Name)
 	}
 	if client == nil {
 		client = http.DefaultClient
 	}
-	if options.ChunkSize <= 0 {
-		options.ChunkSize = 10 << 20
-	}
-	if options.Workers <= 0 {
-		options.Workers = 8
-	}
-	if options.Retries <= 0 {
-		options.Retries = 4
-	}
-	if options.BufferSize <= 0 {
-		options.BufferSize = 256 * 1024
-	}
-	if options.ProgressBytes <= 0 {
-		options.ProgressBytes = 4 << 20
-	}
-	if options.RangeMode == "" {
-		options.RangeMode = "header"
-	}
+	options = normalizedOptions(options)
 	if source.Size <= 0 {
 		size, err := probeSourceSize(ctx, client, source.URL, options.RangeMode)
 		if err != nil {
@@ -76,26 +62,78 @@ func DownloadFile(ctx context.Context, client *http.Client, source Source, outpu
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	committed := false
+	defer func() {
+		_ = file.Close()
+		if !committed {
+			_ = os.Remove(tmp)
+		}
+	}()
 	if err := file.Truncate(source.Size); err != nil {
 		return err
 	}
 
+	if err := downloadChunks(ctx, client, file, source, options, progress); err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, output); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+func normalizedOptions(options Options) Options {
+	if options.ChunkSize <= 0 {
+		options.ChunkSize = 10 << 20
+	}
+	if options.Workers <= 0 {
+		options.Workers = 8
+	}
+	if options.Retries <= 0 {
+		options.Retries = 4
+	}
+	if options.BufferSize <= 0 {
+		options.BufferSize = defaultCopyBufferSize
+	}
+	if options.ProgressBytes <= 0 {
+		options.ProgressBytes = 4 << 20
+	}
+	if options.RangeMode == "" {
+		options.RangeMode = "header"
+	}
+	return options
+}
+
+func downloadChunks(
+	ctx context.Context,
+	client *http.Client,
+	file *os.File,
+	source Source,
+	options Options,
+	progress ProgressFunc,
+) error {
 	downloadCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	jobs := make(chan chunk)
+	chunkCount := int((source.Size + options.ChunkSize - 1) / options.ChunkSize)
+	workers := min(options.Workers, chunkCount)
+	jobs := make(chan chunk, workers)
 	errs := make(chan error, 1)
-	var downloaded atomic.Int64
-	started := time.Now()
+	tracker := newProgressTracker(source, options.ProgressBytes, progress)
 
 	var wg sync.WaitGroup
-	for range options.Workers {
+	for range workers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for job := range jobs {
-				if err := downloadChunk(downloadCtx, client, file, source, job, options, &downloaded, started, progress); err != nil {
+			buffer := borrowCopyBuffer(options.BufferSize)
+			defer releaseCopyBuffer(buffer)
+			for part := range jobs {
+				if err := downloadChunk(downloadCtx, client, file, source, part, options, buffer, tracker); err != nil {
 					select {
 					case errs <- err:
 					default:
@@ -107,21 +145,9 @@ func DownloadFile(ctx context.Context, client *http.Client, source Source, outpu
 		}()
 	}
 
-sendLoop:
-	for start := int64(0); start < source.Size; start += options.ChunkSize {
-		end := start + options.ChunkSize - 1
-		if end >= source.Size {
-			end = source.Size - 1
-		}
-		select {
-		case <-downloadCtx.Done():
-			break sendLoop
-		case jobs <- chunk{start: start, end: end}:
-		}
-	}
+	queueChunks(downloadCtx, jobs, source.Size, options.ChunkSize)
 	close(jobs)
 	wg.Wait()
-
 	select {
 	case err := <-errs:
 		return err
@@ -130,128 +156,20 @@ sendLoop:
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if got := downloaded.Load(); got != source.Size {
+	if got := tracker.downloaded.Load(); got != source.Size {
 		return fmt.Errorf("downloaded %d bytes, expected %d", got, source.Size)
 	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp, output)
-}
-
-type chunk struct {
-	start int64
-	end   int64
-}
-
-func downloadChunk(ctx context.Context, client *http.Client, file *os.File, source Source, part chunk, options Options, downloaded *atomic.Int64, started time.Time, progress ProgressFunc) error {
-	var lastErr error
-	for attempt := 0; attempt < options.Retries; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(time.Duration(attempt) * 300 * time.Millisecond):
-			}
-		}
-		err := fetchChunk(ctx, client, file, source, part, options, downloaded, started, progress)
-		if err == nil {
-			return nil
-		}
-		lastErr = err
-	}
-	return fmt.Errorf("%s bytes %d-%d failed: %w", source.Name, part.start, part.end, lastErr)
-}
-
-func fetchChunk(ctx context.Context, client *http.Client, file *os.File, source Source, part chunk, options Options, downloaded *atomic.Int64, started time.Time, progress ProgressFunc) error {
-	rangeMode := effectiveRangeMode(source.URL, options.RangeMode)
-	requestURL, err := rangedURL(source.URL, part, rangeMode)
-	if err != nil {
-		return err
-	}
-	requestURL, err = stripFragment(requestURL)
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept-Encoding", "identity")
-	if rangeMode == "header" {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", part.start, part.end))
-	}
-	applyMediaHeaders(req, source.URL)
-
-	res, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusPartialContent && !(rangeMode == "query" && res.StatusCode == http.StatusOK) {
-		return fmt.Errorf("unexpected HTTP status %d", res.StatusCode)
-	}
-	if contentRange := res.Header.Get("Content-Range"); rangeMode == "header" && !strings.HasPrefix(contentRange, fmt.Sprintf("bytes %d-%d/", part.start, part.end)) {
-		return fmt.Errorf("unexpected Content-Range %q", contentRange)
-	}
-
-	buf := make([]byte, options.BufferSize)
-	position := part.start
-	written := int64(0)
-	for {
-		n, readErr := res.Body.Read(buf)
-		if n > 0 {
-			if position+int64(n)-1 > part.end {
-				return fmt.Errorf("chunk overflow")
-			}
-			if _, err := file.WriteAt(buf[:n], position); err != nil {
-				return err
-			}
-			position += int64(n)
-			written += int64(n)
-		}
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			return readErr
-		}
-	}
-	if position != part.end+1 {
-		return fmt.Errorf("short chunk: got %d expected %d", position-part.start, part.end-part.start+1)
-	}
-	current := downloaded.Add(written)
-	if progress != nil {
-		elapsed := time.Since(started).Seconds()
-		if elapsed > 0 {
-			progress(Progress{Name: source.Name, Downloaded: current, Total: source.Size, Speed: float64(current) / elapsed})
-		}
-	}
+	tracker.finish(time.Now())
 	return nil
 }
 
-func stripFragment(rawURL string) (string, error) {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return "", err
+func queueChunks(ctx context.Context, jobs chan<- chunk, size int64, chunkSize int64) {
+	for start := int64(0); start < size; start += chunkSize {
+		end := min(start+chunkSize, size) - 1
+		select {
+		case <-ctx.Done():
+			return
+		case jobs <- chunk{start: start, end: end}:
+		}
 	}
-	parsed.Fragment = ""
-	return parsed.String(), nil
-}
-
-func rangedURL(rawURL string, part chunk, mode string) (string, error) {
-	if mode == "header" {
-		return rawURL, nil
-	}
-	if mode != "query" {
-		return "", fmt.Errorf("unsupported range mode %q", mode)
-	}
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return "", err
-	}
-	query := parsed.Query()
-	query.Set("range", fmt.Sprintf("%d-%d", part.start, part.end))
-	parsed.RawQuery = query.Encode()
-	return parsed.String(), nil
 }

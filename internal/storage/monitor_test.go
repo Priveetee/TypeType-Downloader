@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"math"
 	"testing"
 )
@@ -35,6 +36,40 @@ func TestMonitorUsesPercentageThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 	if capacity.RequiredFreeBytes != capacity.TotalBytes/5 {
+		t.Fatalf("capacity = %#v", capacity)
+	}
+}
+
+func TestMonitorTracksAndReleasesReservations(t *testing.T) {
+	monitor, err := NewMonitor(t.TempDir(), 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	capacity, err := monitor.Check()
+	if err != nil {
+		t.Fatal(err)
+	}
+	reserved := capacity.FreeBytes - capacity.RequiredFreeBytes
+	release, err := monitor.Reserve("job", reserved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	capacity, err = monitor.Check()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capacity.ReservedBytes != reserved || !capacity.Available {
+		t.Fatalf("capacity = %#v", capacity)
+	}
+	if _, err := monitor.Reserve("second", 1); !errors.Is(err, ErrInsufficientStorage) {
+		t.Fatalf("reserve error = %v", err)
+	}
+	release()
+	capacity, err = monitor.Check()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capacity.ReservedBytes != 0 {
 		t.Fatalf("capacity = %#v", capacity)
 	}
 }

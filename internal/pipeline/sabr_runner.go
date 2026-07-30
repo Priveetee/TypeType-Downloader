@@ -14,30 +14,40 @@ import (
 func (r *Runner) runSABR(ctx context.Context, id string, record *job.Record, title string, selection *selector.Selection) error {
 	paths := artifact.Build(r.cfg.DataDir, id, title, selection.Container)
 	r.store.Resolve(id, title, resolvedOutput(selection, paths.Name))
-	return r.runSABRArtifact(ctx, id, paths, func() (int64, error) {
+	return r.runSABRArtifact(ctx, id, paths, func() (artifactTimings, error) {
 		downloadMs, err := r.downloadSABR(ctx, id, record, selection, paths)
 		if err != nil {
-			return downloadMs, err
+			return artifactTimings{downloadMs: downloadMs}, err
 		}
 		totalBytes := selection.Video.ContentLength + selection.Audio.ContentLength
 		r.store.Progress(id, job.Progress{Stage: "mux", DownloadedBytes: totalBytes, TotalBytes: totalBytes})
+		muxStarted := time.Now()
 		err = retry(ctx, 2, "mux", func() error {
 			_ = os.Remove(paths.Output)
 			return merge(ctx, r.cfg.Muxer, paths.Video, paths.Audio, paths.Output)
 		})
-		return downloadMs, err
+		return artifactTimings{
+			downloadMs: downloadMs,
+			muxMs:      time.Since(muxStarted).Milliseconds(),
+		}, err
 	})
 }
 
 func (r *Runner) runSABRAudio(ctx context.Context, id string, record *job.Record, title string, selection *selector.AudioSelection) error {
 	paths := artifact.Build(r.cfg.DataDir, id, title, selection.Container)
 	r.store.Resolve(id, title, audioResolvedOutput(selection, paths.Name))
-	return r.runSABRArtifact(ctx, id, paths, func() (int64, error) {
-		return r.downloadSABRAudio(ctx, id, record, selection, paths)
+	return r.runSABRArtifact(ctx, id, paths, func() (artifactTimings, error) {
+		downloadMs, err := r.downloadSABRAudio(ctx, id, record, selection, paths)
+		return artifactTimings{downloadMs: downloadMs}, err
 	})
 }
 
-func (r *Runner) runSABRArtifact(ctx context.Context, id string, paths artifact.Paths, download func() (int64, error)) error {
+func (r *Runner) runSABRArtifact(
+	ctx context.Context,
+	id string,
+	paths artifact.Paths,
+	process func() (artifactTimings, error),
+) error {
 	preserveOutput := false
 	defer func() { cleanupWork(paths, preserveOutput) }()
 	if err := os.MkdirAll(paths.WorkDir, 0o755); err != nil {
@@ -46,7 +56,7 @@ func (r *Runner) runSABRArtifact(ctx context.Context, id string, paths artifact.
 	if err := os.MkdirAll(filepath.Dir(paths.Output), 0o755); err != nil {
 		return err
 	}
-	downloadMs, err := download()
+	timings, err := process()
 	if err != nil {
 		return err
 	}
@@ -62,7 +72,12 @@ func (r *Runner) runSABRArtifact(ctx context.Context, id string, paths artifact.
 	if !saved.Expires.IsZero() {
 		expires = &saved.Expires
 	}
-	r.store.Done(id, saved.Location, saved.Backend, expires, downloadMs, 0)
+	r.store.Done(id, saved.Location, saved.Backend, expires, timings.downloadMs, timings.muxMs)
 	preserveOutput = saved.Backend == "local"
 	return nil
+}
+
+type artifactTimings struct {
+	downloadMs int64
+	muxMs      int64
 }

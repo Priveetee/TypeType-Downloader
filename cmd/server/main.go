@@ -39,12 +39,12 @@ func main() {
 	store := job.NewStore(cfg.PublicBaseURL, sinks...)
 	store.Restore(restored)
 	pendingIDs := store.RestorePending(pending)
-	runner := pipeline.NewRunner(cfg, store, files)
 	disk, err := storage.NewMonitor(cfg.DataDir, cfg.MinFreeBytes, cfg.MinFreePercent)
 	if err != nil {
 		slog.Error("storage monitor failed", "error", err)
 		os.Exit(1)
 	}
+	runner := pipeline.NewRunner(cfg, store, files, disk)
 	runner.Start(ctx)
 	cleanup.Start(ctx, cfg.DataDir, cfg.StorageBackend)
 	for _, id := range pendingIDs {

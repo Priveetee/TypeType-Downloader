@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"typetype-downloader-go/internal/config"
 	"typetype-downloader-go/internal/job"
 	"typetype-downloader-go/internal/selector"
+	"typetype-downloader-go/internal/storage"
 	"typetype-downloader-go/internal/typetype"
 )
 
@@ -22,16 +22,18 @@ type Runner struct {
 	store   *job.Store
 	streams *typetype.Client
 	storage artifact.Store
+	disk    *storage.Monitor
 	http    *http.Client
 	queue   chan string
 }
 
-func NewRunner(cfg config.Config, store *job.Store, storage artifact.Store) *Runner {
+func NewRunner(cfg config.Config, store *job.Store, files artifact.Store, disk *storage.Monitor) *Runner {
 	return &Runner{
 		cfg:     cfg,
 		store:   store,
 		streams: typetype.NewClient(cfg.TypeTypeAPIBase),
-		storage: storage,
+		storage: files,
+		disk:    disk,
 		http:    newHTTPClient(cfg.DownloadWorkers, cfg.HTTP2),
 		queue:   make(chan string, cfg.MaxQueueSize),
 	}
@@ -87,13 +89,6 @@ func (r *Runner) process(parent context.Context, id string) {
 	}
 }
 
-func failureCode(ctx context.Context, err error) string {
-	if ctx.Err() != nil || errors.Is(err, context.Canceled) {
-		return "cancelled"
-	}
-	return "download_failed"
-}
-
 func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	started := time.Now()
 	var stream *typetype.StreamResponse
@@ -111,6 +106,11 @@ func (r *Runner) run(ctx context.Context, id string, record *job.Record) error {
 	if err != nil {
 		return err
 	}
+	release, err := r.reserveVideo(id, selection, stream.Duration)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if selection.Video.DeliveryMethod == "sabr" {
 		return r.runSABR(ctx, id, record, stream.Title, selection)
 	}
@@ -174,6 +174,11 @@ func (r *Runner) runAudioOnly(ctx context.Context, id string, record *job.Record
 	if err != nil {
 		return err
 	}
+	release, err := r.reserveAudio(id, selection, stream.Duration)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if selection.Audio.DeliveryMethod == "sabr" {
 		return r.runSABRAudio(ctx, id, record, stream.Title, selection)
 	}
