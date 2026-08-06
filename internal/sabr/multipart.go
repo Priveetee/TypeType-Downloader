@@ -18,17 +18,28 @@ func downloadParts(
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	failures := make(chan error, parts)
-	var workers sync.WaitGroup
+	partJobs := make(chan int, parts)
 	for part := range parts {
+		partJobs <- part
+	}
+	close(partJobs)
+	var workers sync.WaitGroup
+	for range min(parts, maxConcurrentPartDownloads) {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
-			if err := downloadPart(ctx, client, options, part, parts, progress); err != nil {
-				select {
-				case failures <- err:
-				default:
+			for part := range partJobs {
+				if ctx.Err() != nil {
+					return
 				}
-				cancel()
+				if err := downloadPart(ctx, client, options, part, parts, progress); err != nil {
+					select {
+					case failures <- err:
+					default:
+					}
+					cancel()
+					return
+				}
 			}
 		}()
 	}
@@ -81,3 +92,5 @@ func downloadPart(
 	}
 	return closeTracks(tracks)
 }
+
+const maxConcurrentPartDownloads = 3
