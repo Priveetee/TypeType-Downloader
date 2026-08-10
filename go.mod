@@ -5,7 +5,7 @@ go 1.26
 require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/minio/minio-go/v7 v7.2.1
-	github.com/redis/go-redis/v9 v9.21.0
+	github.com/redis/go-redis/v9 v9.22.0
 	golang.org/x/sys v0.47.0
 )
 
