@@ -13,6 +13,8 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+const internalRedirectHeader = "X-TypeType-Artifact-Proxy"
+
 type S3Config struct {
 	Endpoint       string
 	PublicEndpoint string
@@ -27,9 +29,10 @@ type S3Config struct {
 }
 
 type S3Store struct {
-	client  *minio.Client
-	presign *minio.Client
-	cfg     S3Config
+	client        *minio.Client
+	presign       *minio.Client
+	proxyRedirect bool
+	cfg           S3Config
 }
 
 func (s *S3Store) Name() string { return "s3" }
@@ -67,7 +70,9 @@ func NewS3Store(cfg S3Config) (*S3Store, error) {
 	if cfg.URLTTL <= 0 {
 		cfg.URLTTL = 15 * time.Minute
 	}
-	return &S3Store{client: client, presign: presign, cfg: cfg}, nil
+	proxyRedirect := cfg.PublicEndpoint == "" ||
+		(cfg.PublicEndpoint == cfg.Endpoint && cfg.PublicUseSSL == cfg.UseSSL)
+	return &S3Store{client: client, presign: presign, proxyRedirect: proxyRedirect, cfg: cfg}, nil
 }
 
 func (s *S3Store) Save(ctx context.Context, localPath string, objectKey string) (Saved, error) {
@@ -99,6 +104,9 @@ func (s *S3Store) ServeHTTP(w http.ResponseWriter, r *http.Request, saved Saved,
 	url, err := s.presign.PresignedGetObject(r.Context(), s.cfg.Bucket, saved.Location, s.cfg.URLTTL, values)
 	if err != nil {
 		return err
+	}
+	if s.proxyRedirect {
+		w.Header().Set(internalRedirectHeader, "1")
 	}
 	http.Redirect(w, r, url.String(), http.StatusFound)
 	return nil
