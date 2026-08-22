@@ -1,6 +1,6 @@
 FROM golang:1.26-alpine3.23 AS build
 
-ARG BUILD_VERSION=1.5.0-dev
+ARG BUILD_VERSION=1.6.0-dev
 ARG BUILD_REVISION=development
 ARG BUILD_TIME=unknown
 WORKDIR /src
