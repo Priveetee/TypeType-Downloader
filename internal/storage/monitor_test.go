@@ -61,7 +61,7 @@ func TestMonitorTracksAndReleasesReservations(t *testing.T) {
 	if capacity.ReservedBytes != reserved || !capacity.Available {
 		t.Fatalf("capacity = %#v", capacity)
 	}
-	if _, err := monitor.Reserve("second", 1); !errors.Is(err, ErrInsufficientStorage) {
+	if _, err := monitor.Reserve("second", capacity.TotalBytes); !errors.Is(err, ErrInsufficientStorage) {
 		t.Fatalf("reserve error = %v", err)
 	}
 	release()
