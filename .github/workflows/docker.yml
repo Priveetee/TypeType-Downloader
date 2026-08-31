@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build-and-push:
-    runs-on: [self-hosted, Linux, X64, arko, downloader]
+    runs-on: [self-hosted, Linux, X64, r730, downloader]
     permissions:
       contents: read
       packages: write
@@ -141,7 +141,7 @@ jobs:
   notify-orchestrator:
     needs: build-and-push
     if: github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref, 'refs/tags/v')
-    runs-on: [self-hosted, Linux, X64, arko, downloader]
+    runs-on: [self-hosted, Linux, X64, r730, downloader]
     permissions:
       contents: read
     env:
