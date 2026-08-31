@@ -154,9 +154,10 @@ jobs:
         env:
           IMAGE: ${{ needs.prepare.outputs.image }}
           DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORM: ${{ matrix.platform }}
         run: |
-          docker pull "$IMAGE@$DIGEST"
-          docker run --rm --entrypoint ffmpeg "$IMAGE@$DIGEST" -version
+          docker pull --platform "$PLATFORM" "$IMAGE@$DIGEST"
+          docker run --rm --platform "$PLATFORM" --entrypoint ffmpeg "$IMAGE@$DIGEST" -version
 
       - name: Export digest
         env:
