@@ -155,9 +155,18 @@ jobs:
           IMAGE: ${{ needs.prepare.outputs.image }}
           DIGEST: ${{ steps.build.outputs.digest }}
           PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
         run: |
           docker pull --platform "$PLATFORM" "$IMAGE@$DIGEST"
-          docker run --rm --platform "$PLATFORM" --entrypoint ffmpeg "$IMAGE@$DIGEST" -version
+          if [[ "$ARCH" == "amd64" ]]; then
+            docker run --rm --platform "$PLATFORM" --entrypoint ffmpeg "$IMAGE@$DIGEST" -version
+          else
+            container_id="$(docker create --platform "$PLATFORM" --entrypoint ffmpeg "$IMAGE@$DIGEST")"
+            trap 'docker rm "$container_id" >/dev/null' EXIT
+            ffmpeg_path="$RUNNER_TEMP/ffmpeg-$ARCH"
+            docker cp "$container_id:/usr/bin/ffmpeg" "$ffmpeg_path"
+            readelf -h "$ffmpeg_path" | grep -q 'Machine:.*AArch64'
+          fi
 
       - name: Export digest
         env:
